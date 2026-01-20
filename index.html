@@ -142,8 +142,8 @@
             </label>
           </form>
           <div class="button-row">
-            <button class="primary" id="generate-program">Generate Program</button>
-            <button class="secondary" id="save-onboarding">Save Onboarding</button>
+            <button class="primary" id="generate-program" type="button">Generate Program</button>
+            <button class="secondary" id="save-onboarding" type="button">Save Onboarding</button>
           </div>
         </div>
 
@@ -151,8 +151,8 @@
           <div class="panel-header">
             <h2>Program Viewer</h2>
             <div class="button-row">
-              <button class="secondary" id="refresh-program">Reload</button>
-              <button class="primary" id="finalize-program">Finalize Program</button>
+              <button class="secondary" id="refresh-program" type="button">Reload</button>
+              <button class="primary" id="finalize-program" type="button">Finalize Program</button>
             </div>
           </div>
           <div id="program-tabs" class="tabs"></div>
@@ -170,6 +170,14 @@
             </div>
             <pre id="program-chat-response" class="chat-output"></pre>
           </div>
+        </div>
+
+        <div class="panel debug-panel hidden" id="debug-panel">
+          <div class="panel-header">
+            <h2>Debug Panel</h2>
+            <button class="ghost" id="debug-toggle" type="button">Hide</button>
+          </div>
+          <div id="debug-panel-body" class="debug-panel-body"></div>
         </div>
       </section>
 
@@ -271,5 +279,6 @@
       </section>
     </main>
   </div>
+  <div class="toast-container" id="toast-container" aria-live="polite" aria-atomic="true"></div>
 </body>
 </html>

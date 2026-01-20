@@ -1,9 +1,9 @@
 const { requireAuth, isAdmin } = require("./_lib/auth");
 const { getUserStore, getGlobalStore } = require("./_lib/store");
-const { json } = require("./_lib/response");
+const { json, withErrorHandling } = require("./_lib/response");
 const { nowIso } = require("./_lib/utils");
 
-exports.handler = async (event) => {
+exports.handler = withErrorHandling(async (event) => {
   const { user, error } = requireAuth(event);
   if (error) return error;
   const store = getUserStore(user.userId);
@@ -28,4 +28,4 @@ exports.handler = async (event) => {
     },
     profile,
   });
-};
+});
