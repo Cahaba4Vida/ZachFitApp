@@ -1,6 +1,5 @@
 const { requireAuth } = require("./_lib/auth");
 const { getUserStore } = require("./_lib/store");
-const { query } = require("./_lib/db");
 const { json, error, withErrorHandling } = require("./_lib/response");
 const { parseBody, nowIso } = require("./_lib/utils");
 const { validateSchema } = require("./_lib/schema");
@@ -45,5 +44,5 @@ exports.handler = withErrorHandling(async (event) => {
   const revisions = (await store.get("programRevisions")) || [];
   const nextRevisions = [program, ...revisions].slice(0, 10);
   await store.set("programRevisions", nextRevisions);
-  return json(200, { program });
+  return json(200, program);
 });

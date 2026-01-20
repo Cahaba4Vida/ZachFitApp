@@ -40,6 +40,7 @@ const ensureTraceId = (response, traceId) => {
     ...response,
     headers: {
       ...response.headers,
+      "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Trace-Id",
       "X-Trace-Id": traceId,
     },
     body: JSON.stringify({
@@ -57,13 +58,12 @@ const withErrorHandling = (handler) => async (event, context) => {
     const response = await handler(event, context, traceId);
     return ensureTraceId(response, traceId);
   } catch (err) {
-    const message = err?.message || "Internal server error";
-    console.error(`[trace ${traceId}]`, message);
+    console.error(`[trace ${traceId}]`, err?.message || err);
     return json(
       500,
       {
-        error: message,
-        details: err?.details || null,
+        error: "Internal server error",
+        details: err?.message || "Unknown error",
         statusCode: 500,
         traceId,
       },
