@@ -17,6 +17,11 @@ Set these in Netlify (or locally when running Netlify dev):
 - `OPENAI_API_KEY` (required)
 - `OPENAI_MODEL` (optional, default `gpt-4o-mini`)
 - `ADMIN_EMAIL_ALLOWLIST` (optional, default `edwardszachary647@gmail.com`)
+- `DATABASE_URL` (required for Postgres persistence)
+- `PGSSLMODE` (optional, set to `require` if not included in `DATABASE_URL`)
+
+## OpenAI Model Notes
+Some OpenAI models (e.g. `gpt-5`) restrict sampling parameters and only allow the default temperature. The AI function omits the `temperature` field entirely for compatibility, so model selection should not fail with unsupported sampling settings.
 
 ## Local Development
 
@@ -29,6 +34,10 @@ Set these in Netlify (or locally when running Netlify dev):
    npx netlify dev
    ```
 3. Open the app at `http://localhost:8888`.
+4. Run the smoke test (requires a Netlify Identity JWT in `AUTH_TOKEN`):
+   ```bash
+   node scripts/smoke.mjs
+   ```
 
 ## Deploy to Netlify
 
@@ -38,6 +47,9 @@ Set these in Netlify (or locally when running Netlify dev):
    - Publish directory: `.`
    - Functions directory: `netlify/functions`
 4. Deploy.
+
+## Database Migrations (Neon)
+Run the SQL in `migrations/001_init.sql` via the Neon SQL Editor before first deploy. This creates the tables used for onboarding/program persistence along with shared key-value storage.
 
 ## API Overview
 All API routes are available under `/api/*` and map to Netlify functions.
@@ -68,4 +80,3 @@ All API routes are available under `/api/*` and map to Netlify functions.
 5. **PRs**: Add multiple PRs and confirm history + chart update.
 6. **Settings**: Toggle units and confirm save.
 7. **Admin**: Use allowlisted email to open Admin page; verify client detail + coach prompt link.
-

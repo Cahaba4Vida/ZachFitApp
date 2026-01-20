@@ -12,7 +12,12 @@ exports.handler = withErrorHandling(async (event) => {
   }
   const [, previous, ...rest] = revisions;
   const nextRevisions = [previous, ...rest];
-  await store.set("program", previous);
+  await query(
+    `UPDATE programs
+     SET program = $1, status = $2, updated_at = NOW()
+     WHERE user_id = $3`,
+    [previous, previous.status || "draft", user.userId]
+  );
   await store.set("programRevisions", nextRevisions);
   return json(200, previous);
 });
