@@ -1,0 +1,10 @@
+[build]
+  base = "."
+  command = ""
+  publish = "."
+  functions = "netlify/functions"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Cache-Control = "no-store"
