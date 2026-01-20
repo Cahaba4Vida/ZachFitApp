@@ -49,27 +49,139 @@ const elements = {
   adminWarning: document.getElementById("admin-warning"),
   clientList: document.getElementById("client-list"),
   clientDetail: document.getElementById("client-detail"),
+  toastContainer: document.getElementById("toast-container"),
+  debugPanel: document.getElementById("debug-panel"),
+  debugToggle: document.getElementById("debug-toggle"),
+  debugPanelBody: document.getElementById("debug-panel-body"),
 };
 
 const routes = ["home", "auth", "app", "workouts", "prs", "settings", "admin"];
 
+const debugPanelState = {
+  enabled: new URLSearchParams(window.location.search).get("debug") === "1",
+  open: true,
+  entries: {},
+};
+
+const generateTraceId = () =>
+  `${Math.random().toString(36).slice(2, 8)}-${Date.now().toString(36).slice(-4)}`;
+
+const parseJson = (text) => {
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch (err) {
+    return text;
+  }
+};
+
+const showToast = (message, variant = "error") => {
+  if (!elements.toastContainer) return;
+  const toast = document.createElement("div");
+  toast.className = `toast ${variant}`;
+  toast.textContent = message;
+  elements.toastContainer.appendChild(toast);
+  setTimeout(() => toast.remove(), 4200);
+};
+
+const updateDebugPanel = () => {
+  if (!debugPanelState.enabled || !elements.debugPanel || !elements.debugPanelBody) {
+    if (elements.debugPanel) elements.debugPanel.classList.add("hidden");
+    return;
+  }
+  elements.debugPanel.classList.remove("hidden");
+  elements.debugPanelBody.innerHTML = "";
+  const entries = Object.entries(debugPanelState.entries);
+  if (!entries.length) {
+    elements.debugPanelBody.innerHTML = "<p class=\"muted\">No requests captured yet.</p>";
+    return;
+  }
+  entries.forEach(([label, entry]) => {
+    const container = document.createElement("div");
+    const statusLine = document.createElement("div");
+    statusLine.innerHTML = `<strong>${label}</strong> — status ${entry.status} — trace ${entry.traceId}`;
+    const pre = document.createElement("pre");
+    pre.textContent =
+      typeof entry.body === "string" ? entry.body : JSON.stringify(entry.body, null, 2);
+    container.appendChild(statusLine);
+    container.appendChild(pre);
+    elements.debugPanelBody.appendChild(container);
+  });
+};
+
+const recordDebugEntry = (label, entry) => {
+  if (!debugPanelState.enabled) return;
+  debugPanelState.entries[label] = entry;
+  updateDebugPanel();
+};
+
+const refreshAuthToken = async () => {
+  const identity = window.netlifyIdentity;
+  const user = identity?.currentUser ? identity.currentUser() : null;
+  if (!user) {
+    state.user = null;
+    state.token = null;
+    return null;
+  }
+  state.user = user;
+  if (typeof user.jwt === "function") {
+    try {
+      state.token = await user.jwt();
+      return state.token;
+    } catch (err) {
+      console.warn("Failed to refresh token.", err);
+    }
+  }
+  state.token = user.token?.access_token || null;
+  return state.token;
+};
+
+const requireAuthToken = async () => {
+  const token = await refreshAuthToken();
+  if (!state.user || !token) {
+    showToast("Please log in to continue.", "error");
+    window.location.hash = "#/auth";
+    return null;
+  }
+  return token;
+};
+
 const apiFetch = async (path, options = {}) => {
-  const headers = options.headers || {};
+  const { returnMeta = false, ...requestOptions } = options;
+  const headers = { ...(requestOptions.headers || {}) };
+  const traceId = generateTraceId();
+  headers["X-Trace-Id"] = traceId;
   if (state.token) {
     headers.Authorization = `Bearer ${state.token}`;
   }
-  if (options.body && !headers["Content-Type"]) {
+  if (requestOptions.body && !headers["Content-Type"]) {
     headers["Content-Type"] = "application/json";
   }
-  const response = await fetch(path, { ...options, headers });
+  const response = await fetch(path, { ...requestOptions, headers });
+  const text = await response.text();
+  const data = parseJson(text);
+  const meta = { status: response.status, body: data, traceId };
   if (!response.ok) {
-    const text = await response.text();
-    throw new Error(text || `Request failed: ${response.status}`);
+    const message =
+      typeof data === "object" && data
+        ? data.error || data.message || `Request failed: ${response.status}`
+        : text || `Request failed: ${response.status}`;
+    const error = new Error(message);
+    error.status = response.status;
+    error.body = data;
+    error.traceId = data?.traceId || traceId;
+    console.error(`[trace ${error.traceId}] API error`, {
+      path,
+      status: error.status,
+      error: message,
+      details: data?.details,
+    });
+    throw error;
   }
   if (response.status === 204) {
-    return null;
+    return returnMeta ? { data: null, ...meta } : null;
   }
-  return response.json();
+  return returnMeta ? { data, ...meta } : data;
 };
 
 const formatDate = (date = new Date()) => date.toISOString().split("T")[0];
@@ -90,6 +202,29 @@ const ensureAuth = () => {
     return false;
   }
   return true;
+};
+
+const bindListener = (element, eventName, handler) => {
+  if (!element) {
+    console.warn(`Missing element for ${eventName} listener.`);
+    return;
+  }
+  element.addEventListener(eventName, (event) => {
+    Promise.resolve(handler(event)).catch((err) => {
+      console.error(err);
+      showToast(err?.message || "Something went wrong.", "error");
+    });
+  });
+};
+
+const handleActionError = (label, err) => {
+  const message = err?.message || "Something went wrong.";
+  showToast(`${label} failed: ${message}`, "error");
+  recordDebugEntry(label, {
+    status: err?.status || "error",
+    body: err?.body || message,
+    traceId: err?.traceId || "unknown",
+  });
 };
 
 const updateUserChip = () => {
@@ -461,18 +596,18 @@ const renderClientDetail = () => {
 
 const initIdentity = () => {
   if (!window.netlifyIdentity) return;
-  window.netlifyIdentity.on("init", (user) => {
+  window.netlifyIdentity.on("init", async (user) => {
     state.user = user;
-    state.token = user?.token?.access_token || null;
+    await refreshAuthToken();
     updateUserChip();
     if (user) {
       loadWhoAmI().catch(console.error);
       loadProfile().then(populateOnboardingForm).catch(console.error);
     }
   });
-  window.netlifyIdentity.on("login", (user) => {
+  window.netlifyIdentity.on("login", async (user) => {
     state.user = user;
-    state.token = user.token.access_token;
+    await refreshAuthToken();
     updateUserChip();
     window.location.hash = "#/app";
     loadWhoAmI().catch(console.error);
@@ -520,43 +655,89 @@ const handleRoute = () => {
 };
 
 const setupListeners = () => {
-  elements.loginBtn.addEventListener("click", () => {
+  bindListener(elements.loginBtn, "click", () => {
     window.netlifyIdentity.open("login");
   });
-  elements.logoutBtn.addEventListener("click", () => {
+  bindListener(elements.logoutBtn, "click", () => {
     window.netlifyIdentity.logout();
   });
-  elements.ctaSignup.addEventListener("click", () => window.netlifyIdentity.open("signup"));
-  elements.ctaLogin.addEventListener("click", () => window.netlifyIdentity.open("login"));
-  elements.generateProgram.addEventListener("click", async () => {
-    if (!ensureAuth()) return;
+  bindListener(elements.ctaSignup, "click", () => window.netlifyIdentity.open("signup"));
+  bindListener(elements.ctaLogin, "click", () => window.netlifyIdentity.open("login"));
+  bindListener(elements.generateProgram, "click", async () => {
+    const label = "Generate Program";
+    const token = await requireAuthToken();
+    if (!token || !elements.planForm) return;
     const formData = new FormData(elements.planForm);
     const onboarding = Object.fromEntries(formData.entries());
     onboarding.days = Number(onboarding.days);
-    const program = await apiFetch("/api/program-generate", {
-      method: "POST",
-      body: JSON.stringify({ onboarding }),
-    });
-    state.program = program;
-    renderProgram();
+    try {
+      const result = await apiFetch("/api/program-generate", {
+        method: "POST",
+        body: JSON.stringify({ onboarding }),
+        returnMeta: true,
+      });
+      state.program = result.data;
+      renderProgram();
+      recordDebugEntry(label, {
+        status: result.status,
+        body: result.body,
+        traceId: result.traceId,
+      });
+      showToast("Program generated.", "success");
+    } catch (err) {
+      handleActionError(label, err);
+    }
   });
-  elements.saveOnboarding.addEventListener("click", async () => {
-    if (!ensureAuth()) return;
+  bindListener(elements.saveOnboarding, "click", async () => {
+    const label = "Save Onboarding";
+    const token = await requireAuthToken();
+    if (!token || !elements.planForm) return;
     const formData = new FormData(elements.planForm);
     const onboarding = Object.fromEntries(formData.entries());
     onboarding.days = Number(onboarding.days);
-    await saveProfile({ onboarding, units: onboarding.units || state.profile?.units || "lb" });
+    try {
+      const result = await apiFetch("/api/profile-save", {
+        method: "POST",
+        body: JSON.stringify({ onboarding, units: onboarding.units || state.profile?.units || "lb" }),
+        returnMeta: true,
+      });
+      state.profile = result.data;
+      recordDebugEntry(label, {
+        status: result.status,
+        body: result.body,
+        traceId: result.traceId,
+      });
+      showToast("Onboarding saved.", "success");
+    } catch (err) {
+      handleActionError(label, err);
+    }
   });
-  elements.refreshProgram.addEventListener("click", () => loadProgram().catch(console.error));
-  elements.finalizeProgram.addEventListener("click", async () => {
-    if (!ensureAuth()) return;
-    await apiFetch("/api/program-finalize", { method: "POST" });
-    await apiFetch("/api/audit-log-event", {
-      method: "POST",
-      body: JSON.stringify({ type: "program_finalized", detail: "Program finalized" }),
-    });
+  bindListener(elements.refreshProgram, "click", () => loadProgram());
+  bindListener(elements.finalizeProgram, "click", async () => {
+    const label = "Finalize Program";
+    const token = await requireAuthToken();
+    if (!token) return;
+    try {
+      const result = await apiFetch("/api/program-finalize", { method: "POST", returnMeta: true });
+      recordDebugEntry(label, {
+        status: result.status,
+        body: result.body,
+        traceId: result.traceId,
+      });
+      try {
+        await apiFetch("/api/audit-log-event", {
+          method: "POST",
+          body: JSON.stringify({ type: "program_finalized", detail: "Program finalized" }),
+        });
+      } catch (err) {
+        console.warn("Failed to record audit event.", err);
+      }
+      showToast("Program finalized.", "success");
+    } catch (err) {
+      handleActionError(label, err);
+    }
   });
-  elements.programChatSend.addEventListener("click", async () => {
+  bindListener(elements.programChatSend, "click", async () => {
     const prompt = elements.programChatInput.value.trim();
     if (!prompt) return;
     const response = await apiFetch("/api/ai", {
@@ -565,16 +746,16 @@ const setupListeners = () => {
     });
     elements.programChatResponse.textContent = response.message;
   });
-  elements.programChatClear.addEventListener("click", () => {
+  bindListener(elements.programChatClear, "click", () => {
     elements.programChatInput.value = "";
     elements.programChatResponse.textContent = "";
   });
-  elements.todayWorkout.addEventListener("click", async () => {
+  bindListener(elements.todayWorkout, "click", async () => {
     const date = formatDate();
     await loadWorkout(date);
   });
-  elements.saveWorkout.addEventListener("click", () => saveWorkoutLog().catch(console.error));
-  elements.todayChatSend.addEventListener("click", async () => {
+  bindListener(elements.saveWorkout, "click", () => saveWorkoutLog());
+  bindListener(elements.todayChatSend, "click", async () => {
     const prompt = elements.todayChatInput.value.trim();
     if (!prompt) return;
     const date = formatDate();
@@ -585,11 +766,11 @@ const setupListeners = () => {
     });
     elements.todayChatResponse.textContent = response.message;
   });
-  elements.todayChatClear.addEventListener("click", () => {
+  bindListener(elements.todayChatClear, "click", () => {
     elements.todayChatInput.value = "";
     elements.todayChatResponse.textContent = "";
   });
-  elements.addPr.addEventListener("click", async () => {
+  bindListener(elements.addPr, "click", async () => {
     const formData = new FormData(elements.prForm);
     const pr = Object.fromEntries(formData.entries());
     pr.weight = Number(pr.weight);
@@ -598,7 +779,7 @@ const setupListeners = () => {
     await apiFetch("/api/pr-add", { method: "POST", body: JSON.stringify(pr) });
     await loadPrs();
   });
-  elements.unitsToggle.addEventListener("change", async (event) => {
+  bindListener(elements.unitsToggle, "change", async (event) => {
     if (!ensureAuth()) return;
     await saveProfile({ units: event.target.value });
     await loadPrs();
@@ -606,10 +787,18 @@ const setupListeners = () => {
   window.addEventListener("hashchange", handleRoute);
   elements.resetPassword = document.getElementById("reset-password");
   if (elements.resetPassword) {
-    elements.resetPassword.addEventListener("click", () => {
+    bindListener(elements.resetPassword, "click", () => {
       window.netlifyIdentity.open("login");
     });
   }
+  if (elements.debugToggle) {
+    bindListener(elements.debugToggle, "click", () => {
+      debugPanelState.open = !debugPanelState.open;
+      elements.debugPanelBody.classList.toggle("hidden", !debugPanelState.open);
+      elements.debugToggle.textContent = debugPanelState.open ? "Hide" : "Show";
+    });
+  }
+  updateDebugPanel();
 };
 
 initIdentity();

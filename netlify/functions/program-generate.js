@@ -1,6 +1,6 @@
 const { requireAuth } = require("./_lib/auth");
 const { getUserStore } = require("./_lib/store");
-const { json, error } = require("./_lib/response");
+const { json, error, withErrorHandling } = require("./_lib/response");
 const { parseBody, nowIso } = require("./_lib/utils");
 const { validateSchema } = require("./_lib/schema");
 const { generateProgram } = require("./_lib/program");
@@ -16,7 +16,7 @@ const createProgram = (inputs) => {
   };
 };
 
-exports.handler = async (event) => {
+exports.handler = withErrorHandling(async (event) => {
   const { user, error: authError } = requireAuth(event);
   if (authError) return authError;
   const body = parseBody(event);
@@ -32,4 +32,4 @@ exports.handler = async (event) => {
   await store.set("program", program);
   await store.set("programRevisions", nextRevisions);
   return json(200, program);
-};
+});
