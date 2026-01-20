@@ -184,14 +184,6 @@ button.link {
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
 
-.upload-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-  align-items: center;
-  margin-bottom: 1rem;
-}
-
 label {
   display: grid;
   gap: 0.5rem;
@@ -297,18 +289,6 @@ textarea {
   padding: 0.75rem 0;
 }
 
-.workout-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.quick-fill {
-  display: flex;
-  gap: 0.5rem;
-}
-
 .workout-exercise:last-child {
   border-bottom: none;
 }
@@ -353,34 +333,6 @@ textarea {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 1.5rem;
-}
-
-.toast {
-  position: fixed;
-  bottom: 1.5rem;
-  right: 1.5rem;
-  background: var(--text);
-  color: #fff;
-  padding: 0.75rem 1rem;
-  border-radius: 12px;
-  opacity: 0;
-  pointer-events: none;
-  transform: translateY(12px);
-  transition: all 0.2s ease;
-  z-index: 999;
-}
-
-.toast.show {
-  opacity: 1;
-  transform: translateY(0);
-}
-
-.toast.success {
-  background: var(--success);
-}
-
-.toast.error {
-  background: #dc2626;
 }
 
 @media (max-width: 720px) {
