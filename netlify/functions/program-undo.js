@@ -1,8 +1,9 @@
 const { requireAuth } = require("./_lib/auth");
 const { getUserStore } = require("./_lib/store");
-const { json, error } = require("./_lib/response");
+const { json, error, withErrorHandling } = require("./_lib/response");
+const { query } = require("./_lib/db");
 
-exports.handler = async (event) => {
+exports.handler = withErrorHandling(async (event) => {
   const { user, error: authError } = requireAuth(event);
   if (authError) return authError;
   const store = getUserStore(user.userId);
@@ -12,7 +13,12 @@ exports.handler = async (event) => {
   }
   const [, previous, ...rest] = revisions;
   const nextRevisions = [previous, ...rest];
-  await store.set("program", previous);
+  await query(
+    `UPDATE programs
+     SET program = $1, status = $2, updated_at = NOW()
+     WHERE user_id = $3`,
+    [previous, previous.status || "draft", user.userId]
+  );
   await store.set("programRevisions", nextRevisions);
   return json(200, previous);
-};
+});

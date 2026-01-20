@@ -1,12 +1,12 @@
 const { requireAuth } = require("./_lib/auth");
 const { getUserStore } = require("./_lib/store");
-const { json, error } = require("./_lib/response");
+const { json, error, withErrorHandling } = require("./_lib/response");
 const { parseBody } = require("./_lib/utils");
 const { validateSchema } = require("./_lib/schema");
 
 const estimate1Rm = (weight, reps) => Math.round(weight * (1 + reps / 30));
 
-exports.handler = async (event) => {
+exports.handler = withErrorHandling(async (event) => {
   const { user, error: authError } = requireAuth(event);
   if (authError) return authError;
   const body = parseBody(event);
@@ -26,4 +26,4 @@ exports.handler = async (event) => {
   const next = [entry, ...prs].slice(0, 50);
   await store.set("prs", next);
   return json(200, entry);
-};
+});

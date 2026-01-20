@@ -4,7 +4,7 @@
   "private": true,
   "description": "ZachFitApp - lightweight fitness coaching app",
   "dependencies": {
-    "@netlify/blobs": "^7.3.0",
-    "ajv": "^8.12.0"
+    "ajv": "^8.12.0",
+    "pg": "^8.13.1"
   }
 }
