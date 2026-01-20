@@ -1,0 +1,10 @@
+{
+  "name": "zach-fit-app",
+  "version": "1.0.0",
+  "private": true,
+  "description": "ZachFitApp - lightweight fitness coaching app",
+  "dependencies": {
+    "@netlify/blobs": "^7.3.0",
+    "ajv": "^8.12.0"
+  }
+}
