@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ZachFitApp</title>
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="stylesheet" href="/styles.css" />
+  <meta name="theme-color" content="#0f172a" />
+  <link rel="icon" href="/icons/icon-192.svg" />
+  <script defer src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script defer src="/app.js"></script>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="top-bar">
+      <div class="brand">
+        <div class="logo">ZF</div>
+        <div>
+          <div class="brand-title">ZachFitApp</div>
+          <div class="brand-subtitle">Pro Fitness Coaching</div>
+        </div>
+      </div>
+      <nav class="top-nav">
+        <a href="#/" data-nav>Home</a>
+        <a href="#/app" data-nav>Plan Builder</a>
+        <a href="#/workouts" data-nav>Workouts</a>
+        <a href="#/prs" data-nav>PRs</a>
+        <a href="#/settings" data-nav>Settings</a>
+        <a href="#/admin" data-nav class="admin-only">Admin</a>
+      </nav>
+      <div class="auth-controls">
+        <span class="user-chip" id="user-chip">Not signed in</span>
+        <button class="secondary" id="login-btn">Log in</button>
+        <button class="ghost" id="logout-btn">Log out</button>
+      </div>
+    </header>
+
+    <main class="main-content">
+      <section class="view" data-view="home">
+        <div class="hero">
+          <div>
+            <h1>Build, refine, and log training in one place.</h1>
+            <p>Create a 4-week plan, adjust today’s workout, and track PRs with a clean, coach-ready workflow.</p>
+            <div class="hero-actions">
+              <button class="primary" id="cta-signup">Sign up</button>
+              <button class="secondary" id="cta-login">Log in</button>
+            </div>
+          </div>
+          <div class="hero-card">
+            <h3>What’s inside</h3>
+            <ul>
+              <li>Program builder with 4-week templates</li>
+              <li>Workout calendar + set logging</li>
+              <li>PR tracker + progress chart</li>
+              <li>Admin coaching dashboard</li>
+            </ul>
+          </div>
+        </div>
+        <div class="callout">
+          <strong>Add to Home Screen:</strong>
+          <span>On iOS: tap the share icon, then “Add to Home Screen.” On Android: open the browser menu and tap “Install app.”</span>
+        </div>
+      </section>
+
+      <section class="view" data-view="auth">
+        <div class="panel">
+          <h2>Sign up or log in</h2>
+          <p>Use Netlify Identity to access your coaching workspace instantly.</p>
+          <div class="auth-grid">
+            <div>
+              <h3>Sign up</h3>
+              <div id="identity-signup"></div>
+            </div>
+            <div>
+              <h3>Log in</h3>
+              <div id="identity-login"></div>
+              <button class="link" id="reset-password">Forgot password?</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" data-view="app">
+        <div class="panel">
+          <h2>Plan Builder</h2>
+          <p>Enter onboarding details to generate a structured 4-week program. Refinements use the AI coach for quick tweaks.</p>
+          <div class="upload-row">
+            <input type="file" id="program-import-file" accept="image/*,.txt,.pdf" />
+            <button class="secondary" id="program-import">Import from file/photo</button>
+            <span class="muted" id="program-import-status"></span>
+          </div>
+          <form id="plan-form" class="form-grid">
+            <label>
+              Goal
+              <select name="goal" required>
+                <option value="">Select goal</option>
+                <option value="bodybuilding">Bodybuilding / Hypertrophy</option>
+                <option value="powerlifting">Powerlifting / Strength</option>
+                <option value="general">General Fitness</option>
+              </select>
+            </label>
+            <label>
+              Training days per week
+              <select name="days" required>
+                <option value="3">3</option>
+                <option value="4" selected>4</option>
+                <option value="5">5</option>
+                <option value="6">6</option>
+              </select>
+            </label>
+            <label>
+              Experience level
+              <select name="experience" required>
+                <option value="beginner">Beginner</option>
+                <option value="intermediate" selected>Intermediate</option>
+                <option value="advanced">Advanced</option>
+              </select>
+            </label>
+            <label>
+              Equipment
+              <input type="text" name="equipment" placeholder="e.g. full gym, dumbbells" required />
+            </label>
+            <label>
+              Constraints / injuries
+              <input type="text" name="constraints" placeholder="e.g. shoulder friendly" />
+            </label>
+            <label>
+              Bench PR (1RM)
+              <input type="number" name="benchPr" min="0" step="0.5" />
+            </label>
+            <label>
+              Squat PR (1RM)
+              <input type="number" name="squatPr" min="0" step="0.5" />
+            </label>
+            <label>
+              Deadlift PR (1RM)
+              <input type="number" name="deadliftPr" min="0" step="0.5" />
+            </label>
+            <label>
+              Units
+              <select name="units">
+                <option value="lb" selected>lb</option>
+                <option value="kg">kg</option>
+              </select>
+            </label>
+          </form>
+          <div class="button-row">
+            <button class="primary" id="generate-program">Generate Program</button>
+            <button class="secondary" id="save-onboarding">Save Onboarding</button>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-header">
+            <h2>Program Viewer</h2>
+            <div class="button-row">
+              <button class="secondary" id="refresh-program">Reload</button>
+              <button class="primary" id="finalize-program">Finalize Program</button>
+            </div>
+          </div>
+          <div id="program-tabs" class="tabs"></div>
+          <div id="program-weeks" class="program-weeks"></div>
+        </div>
+
+        <div class="panel">
+          <h2>Program Refine Chatbot</h2>
+          <p>Ask the coach to adjust the program. The AI returns a JSON patch to merge into the current program.</p>
+          <div class="chat-panel">
+            <textarea id="program-chat-input" rows="4" placeholder="E.g. Swap leg press for hack squat on Day 2"></textarea>
+            <div class="button-row">
+              <button class="secondary" id="program-chat-send">Send</button>
+              <button class="ghost" id="program-chat-clear">Clear</button>
+            </div>
+            <pre id="program-chat-response" class="chat-output"></pre>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" data-view="workouts">
+        <div class="panel">
+          <div class="panel-header">
+            <h2>Workout Calendar</h2>
+            <button class="primary" id="today-workout">Today’s Workout</button>
+          </div>
+          <div id="workout-calendar" class="calendar"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-header">
+            <h2>Workout Detail</h2>
+            <button class="secondary" id="save-workout">Save Workout</button>
+          </div>
+          <div id="workout-detail"></div>
+        </div>
+        <div class="panel">
+          <h2>Today Adjust Chatbot</h2>
+          <p>Use this for small adjustments based on readiness or equipment changes. Returns updated workout JSON.</p>
+          <div class="chat-panel">
+            <textarea id="today-chat-input" rows="4" placeholder="E.g. Short on time today, reduce volume"></textarea>
+            <div class="button-row">
+              <button class="secondary" id="today-chat-send">Send</button>
+              <button class="ghost" id="today-chat-clear">Clear</button>
+            </div>
+            <pre id="today-chat-response" class="chat-output"></pre>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" data-view="prs">
+        <div class="panel">
+          <h2>Add PR</h2>
+          <form id="pr-form" class="form-grid">
+            <label>
+              Lift
+              <select name="lift" required>
+                <option value="bench">Bench Press</option>
+                <option value="squat">Squat</option>
+                <option value="deadlift">Deadlift</option>
+                <option value="overhead">Overhead Press</option>
+              </select>
+            </label>
+            <label>
+              Weight
+              <input type="number" name="weight" min="0" step="0.5" required />
+            </label>
+            <label>
+              Reps
+              <input type="number" name="reps" min="1" step="1" required />
+            </label>
+            <label>
+              RPE (optional)
+              <input type="number" name="rpe" min="1" max="10" step="0.5" />
+            </label>
+          </form>
+          <button class="primary" id="add-pr">Add PR</button>
+        </div>
+        <div class="panel">
+          <h2>PR History</h2>
+          <div id="pr-history"></div>
+        </div>
+        <div class="panel">
+          <h2>Progress Chart</h2>
+          <canvas id="pr-chart" height="120"></canvas>
+        </div>
+      </section>
+
+      <section class="view" data-view="settings">
+        <div class="panel">
+          <h2>Settings</h2>
+          <label class="toggle">
+            <span>Units</span>
+            <select id="units-toggle">
+              <option value="lb">lb</option>
+              <option value="kg">kg</option>
+            </select>
+          </label>
+        </div>
+      </section>
+
+      <section class="view" data-view="admin">
+        <div class="panel">
+          <h2>Admin Dashboard</h2>
+          <div id="admin-warning" class="callout warning"></div>
+          <div class="admin-grid">
+            <div>
+              <h3>Clients</h3>
+              <div id="client-list"></div>
+            </div>
+            <div>
+              <h3>Client Detail</h3>
+              <div id="client-detail"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+  <div id="toast" class="toast"></div>
+</body>
+</html>
