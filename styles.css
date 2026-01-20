@@ -157,11 +157,6 @@ button {
   cursor: pointer;
 }
 
-button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
 button.primary {
   background: var(--accent);
   color: #fff;
@@ -187,30 +182,6 @@ button.link {
   display: grid;
   gap: 1rem;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-}
-
-.upload-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-  align-items: center;
-  margin-bottom: 1rem;
-}
-
-.revision-list {
-  display: grid;
-  gap: 0.75rem;
-}
-
-.revision-card {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  padding: 0.75rem 1rem;
-  border-radius: 12px;
-  border: 1px solid var(--border);
-  background: #f8fafc;
 }
 
 label {
@@ -313,44 +284,9 @@ textarea {
   font-size: 0.85rem;
 }
 
-.calendar-item.completed {
-  border-color: #86efac;
-  background: #f0fdf4;
-}
-
-.badge {
-  display: inline-block;
-  margin-top: 0.25rem;
-  padding: 0.2rem 0.5rem;
-  font-size: 0.7rem;
-  border-radius: 999px;
-  background: #dcfce7;
-  color: #166534;
-}
-
 .workout-exercise {
   border-bottom: 1px solid var(--border);
   padding: 0.75rem 0;
-}
-
-.workout-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.quick-fill {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.workout-title {
-  display: flex;
-  justify-content: space-between;
-  gap: 1rem;
-  align-items: center;
-  margin-bottom: 1rem;
 }
 
 .workout-exercise:last-child {
@@ -362,25 +298,6 @@ textarea {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.5rem;
   margin-top: 0.5rem;
-}
-
-.summary-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 1rem;
-}
-
-.summary-card {
-  padding: 1rem;
-  border-radius: 12px;
-  border: 1px solid var(--border);
-  background: #f8fafc;
-  display: grid;
-  gap: 0.35rem;
-}
-
-.summary-card strong {
-  font-size: 1.1rem;
 }
 
 .callout {
@@ -404,10 +321,6 @@ textarea {
   gap: 1.5rem;
 }
 
-.audit-log {
-  margin-top: 1.5rem;
-}
-
 .admin-only {
   display: none;
 }
@@ -420,34 +333,6 @@ textarea {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 1.5rem;
-}
-
-.toast {
-  position: fixed;
-  bottom: 1.5rem;
-  right: 1.5rem;
-  background: var(--text);
-  color: #fff;
-  padding: 0.75rem 1rem;
-  border-radius: 12px;
-  opacity: 0;
-  pointer-events: none;
-  transform: translateY(12px);
-  transition: all 0.2s ease;
-  z-index: 999;
-}
-
-.toast.show {
-  opacity: 1;
-  transform: translateY(0);
-}
-
-.toast.success {
-  background: var(--success);
-}
-
-.toast.error {
-  background: #dc2626;
 }
 
 @media (max-width: 720px) {

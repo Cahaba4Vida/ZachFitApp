@@ -3,14 +3,11 @@ const state = {
   token: null,
   profile: null,
   program: null,
-  programRevisions: [],
   workouts: {},
   prs: [],
-  planDirty: false,
   admin: {
     clients: [],
     selected: null,
-    audit: [],
   },
   chart: null,
 };
@@ -32,15 +29,10 @@ const elements = {
   programWeeks: document.getElementById("program-weeks"),
   refreshProgram: document.getElementById("refresh-program"),
   finalizeProgram: document.getElementById("finalize-program"),
-  programImport: document.getElementById("program-import"),
-  programImportFile: document.getElementById("program-import-file"),
-  programImportStatus: document.getElementById("program-import-status"),
-  planDirtyStatus: document.getElementById("plan-dirty-status"),
   programChatInput: document.getElementById("program-chat-input"),
   programChatSend: document.getElementById("program-chat-send"),
   programChatClear: document.getElementById("program-chat-clear"),
   programChatResponse: document.getElementById("program-chat-response"),
-  programRevisions: document.getElementById("program-revisions"),
   workoutCalendar: document.getElementById("workout-calendar"),
   workoutDetail: document.getElementById("workout-detail"),
   todayWorkout: document.getElementById("today-workout"),
@@ -53,13 +45,10 @@ const elements = {
   addPr: document.getElementById("add-pr"),
   prHistory: document.getElementById("pr-history"),
   prChart: document.getElementById("pr-chart"),
-  prSummary: document.getElementById("pr-summary"),
   unitsToggle: document.getElementById("units-toggle"),
   adminWarning: document.getElementById("admin-warning"),
   clientList: document.getElementById("client-list"),
   clientDetail: document.getElementById("client-detail"),
-  adminAuditLog: document.getElementById("admin-audit-log"),
-  toast: document.getElementById("toast"),
 };
 
 const routes = ["home", "auth", "app", "workouts", "prs", "settings", "admin"];
@@ -84,86 +73,6 @@ const apiFetch = async (path, options = {}) => {
 };
 
 const formatDate = (date = new Date()) => date.toISOString().split("T")[0];
-const ONBOARDING_DRAFT_KEY = "zachfitapp:onboardingDraft";
-let onboardingDraftTimeout = null;
-
-const setButtonLoading = (button, isLoading, loadingText) => {
-  if (!button) return;
-  if (isLoading) {
-    if (!button.dataset.originalText) {
-      button.dataset.originalText = button.textContent;
-    }
-    button.textContent = loadingText || button.dataset.originalText;
-    button.disabled = true;
-  } else {
-    button.textContent = button.dataset.originalText || button.textContent;
-    button.disabled = false;
-  }
-};
-
-const showToast = (message, type = "success") => {
-  elements.toast.textContent = message;
-  elements.toast.className = `toast show ${type}`;
-  setTimeout(() => {
-    elements.toast.className = "toast";
-  }, 2500);
-};
-
-const setPlanDirty = (dirty, message) => {
-  state.planDirty = dirty;
-  if (!elements.planDirtyStatus) return;
-  if (dirty) {
-    elements.planDirtyStatus.textContent = message || "Unsaved changes";
-  } else {
-    elements.planDirtyStatus.textContent = "";
-  }
-};
-
-const collectOnboardingForm = () => {
-  const formData = new FormData(elements.planForm);
-  const onboarding = Object.fromEntries(formData.entries());
-  onboarding.days = Number(onboarding.days);
-  return onboarding;
-};
-
-const saveOnboardingDraft = () => {
-  const onboarding = collectOnboardingForm();
-  localStorage.setItem(ONBOARDING_DRAFT_KEY, JSON.stringify(onboarding));
-};
-
-const scheduleOnboardingDraft = () => {
-  setPlanDirty(true);
-  if (onboardingDraftTimeout) clearTimeout(onboardingDraftTimeout);
-  onboardingDraftTimeout = setTimeout(() => {
-    saveOnboardingDraft();
-  }, 800);
-};
-
-const applyOnboardingData = (data, { markDirty = false } = {}) => {
-  if (!data) return;
-  Object.entries(data).forEach(([key, value]) => {
-    const field = elements.planForm.elements.namedItem(key);
-    if (field) {
-      field.value = value;
-    }
-  });
-  if (markDirty) {
-    setPlanDirty(true, "Draft restored");
-  }
-};
-
-const restoreOnboardingDraft = () => {
-  if (state.profile?.onboarding) return;
-  const raw = localStorage.getItem(ONBOARDING_DRAFT_KEY);
-  if (!raw) return;
-  try {
-    const data = JSON.parse(raw);
-    applyOnboardingData(data, { markDirty: true });
-    showToast("Restored onboarding draft", "success");
-  } catch (err) {
-    console.error(err);
-  }
-};
 
 const showView = (name) => {
   views.forEach((view) => {
@@ -227,8 +136,13 @@ const saveProfile = async (partial) => {
 
 const populateOnboardingForm = (profile) => {
   if (!profile?.onboarding) return;
-  applyOnboardingData(profile.onboarding, { markDirty: false });
-  setPlanDirty(false);
+  const data = profile.onboarding;
+  Object.entries(data).forEach(([key, value]) => {
+    const field = elements.planForm.elements.namedItem(key);
+    if (field) {
+      field.value = value;
+    }
+  });
 };
 
 const renderProgram = () => {
@@ -287,57 +201,6 @@ const loadProgram = async () => {
   const program = await apiFetch("/api/program-get");
   state.program = program;
   renderProgram();
-  await loadProgramRevisions().catch(console.error);
-};
-
-const loadProgramRevisions = async () => {
-  if (!elements.programRevisions) return;
-  const revisions = await apiFetch("/api/program-revisions");
-  state.programRevisions = revisions || [];
-  renderProgramRevisions();
-};
-
-const renderProgramRevisions = () => {
-  if (!elements.programRevisions) return;
-  elements.programRevisions.innerHTML = "";
-  if (!state.programRevisions.length) {
-    elements.programRevisions.innerHTML = "<p>No revisions yet.</p>";
-    return;
-  }
-  state.programRevisions.forEach((revision, index) => {
-    const card = document.createElement("div");
-    card.className = "revision-card";
-    const updatedAt = revision.updatedAt ? new Date(revision.updatedAt).toLocaleString() : "Unknown";
-    card.innerHTML = `
-      <div>
-        <strong>${revision.status || "draft"}</strong>
-        <div>${updatedAt}</div>
-      </div>
-    `;
-    const button = document.createElement("button");
-    button.className = "secondary";
-    button.textContent = "Restore";
-    button.addEventListener("click", async () => {
-      setButtonLoading(button, true, "Restoring...");
-      try {
-        const restored = await apiFetch("/api/program-save", {
-          method: "POST",
-          body: JSON.stringify({ program: revision }),
-        });
-        state.program = restored;
-        renderProgram();
-        await loadProgramRevisions().catch(console.error);
-        showToast("Program restored", "success");
-      } catch (err) {
-        console.error(err);
-        showToast("Failed to restore revision", "error");
-      } finally {
-        setButtonLoading(button, false);
-      }
-    });
-    card.appendChild(button);
-    elements.programRevisions.appendChild(card);
-  });
 };
 
 const loadWorkouts = async () => {
@@ -357,12 +220,11 @@ const renderCalendar = () => {
     .sort(([a], [b]) => a.localeCompare(b))
     .forEach(([date, workout]) => {
       const item = document.createElement("div");
-      item.className = `calendar-item${workout.completed ? " completed" : ""}`;
+      item.className = "calendar-item";
       item.innerHTML = `
         <div>
           <strong>${date}</strong>
           <div>${workout.name || "Workout"}</div>
-          ${workout.completed ? "<span class=\"badge\">Completed</span>" : ""}
         </div>
       `;
       const button = document.createElement("button");
@@ -381,34 +243,12 @@ const renderWorkoutDetail = (workout, date) => {
   }
   elements.workoutDetail.innerHTML = "";
   const header = document.createElement("div");
-  header.innerHTML = `
-    <div class="workout-title">
-      <div>
-        <h3>${workout.name || "Workout"}</h3>
-        <p>${date}</p>
-      </div>
-      <label class="toggle">
-        <span>Completed</span>
-        <input type="checkbox" id="workout-complete" ${workout.completed ? "checked" : ""} />
-      </label>
-    </div>
-  `;
+  header.innerHTML = `<h3>${workout.name || "Workout"}</h3><p>${date}</p>`;
   elements.workoutDetail.appendChild(header);
   workout.exercises.forEach((exercise, idx) => {
     const container = document.createElement("div");
     container.className = "workout-exercise";
-    container.innerHTML = `
-      <div class="workout-header">
-        <div>
-          <strong>${exercise.name}</strong>
-          <div>${exercise.sets} sets x ${exercise.reps} reps @ ${exercise.intensity}</div>
-        </div>
-        <div class="quick-fill">
-          <button class="ghost" data-action="copy-last" data-exercise="${idx}">Copy last</button>
-          <button class="ghost" data-action="fill-all" data-exercise="${idx}">Fill all</button>
-        </div>
-      </div>
-    `;
+    container.innerHTML = `<strong>${exercise.name}</strong><div>${exercise.sets} sets x ${exercise.reps} reps @ ${exercise.intensity}</div>`;
     const sets = Array.from({ length: exercise.sets }).map((_, setIndex) => {
       const log = exercise.logs?.[setIndex] || { weight: "", reps: "", rpe: "" };
       return `
@@ -434,46 +274,33 @@ const loadWorkout = async (date) => {
 const saveWorkoutLog = async () => {
   const date = elements.workoutDetail.dataset.date;
   if (!date) return;
-  setButtonLoading(elements.saveWorkout, true, "Saving...");
-  try {
-    const workout = await apiFetch(`/api/workout-get?date=${date}`);
-    const inputs = elements.workoutDetail.querySelectorAll("input[data-set]");
-    const completedToggle = elements.workoutDetail.querySelector("#workout-complete");
-    workout.completed = completedToggle?.checked || false;
-    inputs.forEach((input) => {
-      const setIndex = Number(input.dataset.index);
-      const exerciseIndex = Number(input.dataset.set);
-      const field = input.dataset.field;
-      const value = input.value === "" ? "" : Number(input.value);
-      if (!workout.exercises[exerciseIndex].logs) {
-        workout.exercises[exerciseIndex].logs = [];
-      }
-      if (!workout.exercises[exerciseIndex].logs[setIndex]) {
-        workout.exercises[exerciseIndex].logs[setIndex] = { weight: "", reps: "", rpe: "" };
-      }
-      workout.exercises[exerciseIndex].logs[setIndex][field] = value;
-    });
-    const saved = await apiFetch(`/api/workout-log-save?date=${date}`, {
-      method: "POST",
-      body: JSON.stringify({ workout }),
-    });
-    state.workouts[date] = saved;
-    renderCalendar();
-    renderWorkoutDetail(saved, date);
-    showToast("Workout saved", "success");
-  } catch (err) {
-    console.error(err);
-    showToast("Failed to save workout", "error");
-  } finally {
-    setButtonLoading(elements.saveWorkout, false);
-  }
+  const workout = await apiFetch(`/api/workout-get?date=${date}`);
+  const inputs = elements.workoutDetail.querySelectorAll("input[data-set]");
+  inputs.forEach((input) => {
+    const setIndex = Number(input.dataset.index);
+    const exerciseIndex = Number(input.dataset.set);
+    const field = input.dataset.field;
+    const value = input.value === "" ? "" : Number(input.value);
+    if (!workout.exercises[exerciseIndex].logs) {
+      workout.exercises[exerciseIndex].logs = [];
+    }
+    if (!workout.exercises[exerciseIndex].logs[setIndex]) {
+      workout.exercises[exerciseIndex].logs[setIndex] = { weight: "", reps: "", rpe: "" };
+    }
+    workout.exercises[exerciseIndex].logs[setIndex][field] = value;
+  });
+  const saved = await apiFetch(`/api/workout-log-save?date=${date}`, {
+    method: "POST",
+    body: JSON.stringify({ workout }),
+  });
+  state.workouts[date] = saved;
+  renderWorkoutDetail(saved, date);
 };
 
 const loadPrs = async () => {
   const prs = await apiFetch("/api/pr-list");
   state.prs = prs || [];
   renderPrHistory();
-  renderPrSummary();
   renderPrChart();
 };
 
@@ -490,38 +317,6 @@ const renderPrHistory = () => {
     list.appendChild(item);
   });
   elements.prHistory.appendChild(list);
-};
-
-const renderPrSummary = () => {
-  if (!elements.prSummary) return;
-  elements.prSummary.innerHTML = "";
-  if (!state.prs.length) {
-    elements.prSummary.innerHTML = "<p>No PR insights yet.</p>";
-    return;
-  }
-  const latest = [...state.prs].sort((a, b) => b.date.localeCompare(a.date))[0];
-  const bestByLift = state.prs.reduce((acc, entry) => {
-    if (!acc[entry.lift] || entry.estimated1Rm > acc[entry.lift].estimated1Rm) {
-      acc[entry.lift] = entry;
-    }
-    return acc;
-  }, {});
-  const cards = [
-    { label: "Total PRs", value: `${state.prs.length}` },
-    { label: "Latest PR", value: `${latest.lift} ${latest.weight}x${latest.reps}` },
-  ];
-  Object.values(bestByLift).forEach((entry) => {
-    cards.push({
-      label: `Best ${entry.lift}`,
-      value: `${entry.estimated1Rm} est 1RM`,
-    });
-  });
-  cards.forEach((card) => {
-    const item = document.createElement("div");
-    item.className = "summary-card";
-    item.innerHTML = `<span>${card.label}</span><strong>${card.value}</strong>`;
-    elements.prSummary.appendChild(item);
-  });
 };
 
 const renderPrChart = () => {
@@ -559,31 +354,6 @@ const loadAdminClients = async () => {
   const data = await apiFetch("/api/admin/clients-list");
   state.admin.clients = data.clients || [];
   renderClients();
-  await loadAdminAudit().catch(console.error);
-};
-
-const loadAdminAudit = async () => {
-  if (!elements.adminAuditLog) return;
-  const events = await apiFetch("/api/admin/audit-list");
-  state.admin.audit = events || [];
-  renderAdminAudit();
-};
-
-const renderAdminAudit = () => {
-  if (!elements.adminAuditLog) return;
-  elements.adminAuditLog.innerHTML = "";
-  if (!state.admin.audit?.length) {
-    elements.adminAuditLog.innerHTML = "<p>No audit events yet.</p>";
-    return;
-  }
-  const list = document.createElement("ul");
-  state.admin.audit.slice(0, 20).forEach((event) => {
-    const item = document.createElement("li");
-    const time = event.createdAt ? new Date(event.createdAt).toLocaleString() : "-";
-    item.textContent = `${time} • ${event.email} • ${event.type}`;
-    list.appendChild(item);
-  });
-  elements.adminAuditLog.appendChild(list);
 };
 
 const renderClients = () => {
@@ -637,14 +407,7 @@ const renderClientDetail = () => {
     </div>
     <div class="day-card">
       <h4>Program</h4>
-      <textarea class="chat-output" rows="8" id="admin-program-json">${JSON.stringify(
-        detail.program || {},
-        null,
-        2
-      )}</textarea>
-      <div class="button-row">
-        <button class="secondary" id="save-admin-program">Save program</button>
-      </div>
+      <pre class="chat-output">${JSON.stringify(detail.program || {}, null, 2)}</pre>
     </div>
     <div class="day-card">
       <h4>Workouts</h4>
@@ -674,8 +437,6 @@ const renderClientDetail = () => {
   const openBtn = document.getElementById("open-chatgpt");
   const promptText = document.getElementById("coach-prompt-text");
   const saveWorkoutsBtn = document.getElementById("save-admin-workouts");
-  const saveProgramBtn = document.getElementById("save-admin-program");
-  const programField = document.getElementById("admin-program-json");
   const workoutsField = document.getElementById("admin-workouts-json");
   copyBtn.addEventListener("click", () => {
     promptText.select();
@@ -685,71 +446,37 @@ const renderClientDetail = () => {
     const url = `https://chat.openai.com/?prompt=${encodeURIComponent(prompt)}`;
     window.open(url, "_blank");
   });
-  saveProgramBtn.addEventListener("click", async () => {
-    setButtonLoading(saveProgramBtn, true, "Saving...");
-    try {
-      const program = JSON.parse(programField.value || "{}");
-      await apiFetch("/api/admin/client-update", {
-        method: "POST",
-        body: JSON.stringify({ userId: detail.userId, program }),
-      });
-      showToast("Program updated", "success");
-    } catch (err) {
-      console.error(err);
-      showToast("Failed to update program", "error");
-    } finally {
-      setButtonLoading(saveProgramBtn, false);
-    }
-  });
   saveWorkoutsBtn.addEventListener("click", async () => {
-    setButtonLoading(saveWorkoutsBtn, true, "Saving...");
     try {
       const workouts = JSON.parse(workoutsField.value || "{}");
       await apiFetch("/api/admin/client-update", {
         method: "POST",
         body: JSON.stringify({ userId: detail.userId, workouts }),
       });
-      showToast("Workouts updated", "success");
     } catch (err) {
       console.error(err);
-      showToast("Failed to update workouts", "error");
-    } finally {
-      setButtonLoading(saveWorkoutsBtn, false);
     }
   });
 };
 
 const initIdentity = () => {
   if (!window.netlifyIdentity) return;
-  window.netlifyIdentity.on("init", async (user) => {
+  window.netlifyIdentity.on("init", (user) => {
     state.user = user;
     state.token = user?.token?.access_token || null;
     updateUserChip();
     if (user) {
-      await loadWhoAmI().catch(console.error);
-      if (state.user?.role === "admin") {
-        window.location.hash = "#/admin";
-      }
-      loadProfile()
-        .then((profile) => {
-          populateOnboardingForm(profile);
-          restoreOnboardingDraft();
-        })
-        .catch(console.error);
+      loadWhoAmI().catch(console.error);
+      loadProfile().then(populateOnboardingForm).catch(console.error);
     }
   });
-  window.netlifyIdentity.on("login", async (user) => {
+  window.netlifyIdentity.on("login", (user) => {
     state.user = user;
     state.token = user.token.access_token;
     updateUserChip();
-    await loadWhoAmI().catch(console.error);
-    window.location.hash = state.user?.role === "admin" ? "#/admin" : "#/app";
-    loadProfile()
-      .then((profile) => {
-        populateOnboardingForm(profile);
-        restoreOnboardingDraft();
-      })
-      .catch(console.error);
+    window.location.hash = "#/app";
+    loadWhoAmI().catch(console.error);
+    loadProfile().then(populateOnboardingForm).catch(console.error);
     apiFetch("/api/audit-log-event", {
       method: "POST",
       body: JSON.stringify({ type: "login", detail: "User logged in" }),
@@ -793,12 +520,6 @@ const handleRoute = () => {
 };
 
 const setupListeners = () => {
-  elements.planForm.addEventListener("submit", (event) => {
-    event.preventDefault();
-  });
-  elements.planForm.addEventListener("input", () => {
-    scheduleOnboardingDraft();
-  });
   elements.loginBtn.addEventListener("click", () => {
     window.netlifyIdentity.open("login");
   });
@@ -809,135 +530,40 @@ const setupListeners = () => {
   elements.ctaLogin.addEventListener("click", () => window.netlifyIdentity.open("login"));
   elements.generateProgram.addEventListener("click", async () => {
     if (!ensureAuth()) return;
-    setButtonLoading(elements.generateProgram, true, "Generating...");
-    try {
-      const onboarding = collectOnboardingForm();
-      const program = await apiFetch("/api/program-generate", {
-        method: "POST",
-        body: JSON.stringify({ onboarding }),
-      });
-      state.program = program;
-      renderProgram();
-      await loadProgramRevisions().catch(console.error);
-      setPlanDirty(false);
-      localStorage.removeItem(ONBOARDING_DRAFT_KEY);
-      showToast("Program generated", "success");
-    } catch (err) {
-      console.error(err);
-      showToast("Failed to generate program", "error");
-    } finally {
-      setButtonLoading(elements.generateProgram, false);
-    }
+    const formData = new FormData(elements.planForm);
+    const onboarding = Object.fromEntries(formData.entries());
+    onboarding.days = Number(onboarding.days);
+    const program = await apiFetch("/api/program-generate", {
+      method: "POST",
+      body: JSON.stringify({ onboarding }),
+    });
+    state.program = program;
+    renderProgram();
   });
   elements.saveOnboarding.addEventListener("click", async () => {
     if (!ensureAuth()) return;
-    setButtonLoading(elements.saveOnboarding, true, "Saving...");
-    try {
-      const onboarding = collectOnboardingForm();
-      await saveProfile({ onboarding, units: onboarding.units || state.profile?.units || "lb" });
-      setPlanDirty(false);
-      localStorage.removeItem(ONBOARDING_DRAFT_KEY);
-      showToast("Onboarding saved", "success");
-    } catch (err) {
-      console.error(err);
-      showToast("Failed to save onboarding", "error");
-    } finally {
-      setButtonLoading(elements.saveOnboarding, false);
-    }
-  });
-  elements.programImport.addEventListener("click", async () => {
-    if (!ensureAuth()) return;
-    const file = elements.programImportFile.files?.[0];
-    if (!file) {
-      showToast("Select a file or photo first", "error");
-      return;
-    }
-    elements.programImportStatus.textContent = "Importing...";
-    setButtonLoading(elements.programImport, true, "Importing...");
-    try {
-      const reader = new FileReader();
-      const fileContent = await new Promise((resolve, reject) => {
-        reader.onload = () => resolve(reader.result);
-        reader.onerror = () => reject(new Error("Failed to read file"));
-        if (file.type.startsWith("image/")) {
-          reader.readAsDataURL(file);
-        } else {
-          reader.readAsText(file);
-        }
-      });
-      const response = await apiFetch("/api/ai", {
-        method: "POST",
-        body: JSON.stringify({
-          mode: "program_import",
-          prompt: "Extract onboarding inputs from this file and return JSON only.",
-          fileContent,
-          fileName: file.name,
-          fileType: file.type,
-        }),
-      });
-      const cleaned = response.message.replace(/```json|```/g, "").trim();
-      const parsed = JSON.parse(cleaned);
-      Object.entries(parsed).forEach(([key, value]) => {
-        const field = elements.planForm.elements.namedItem(key);
-        if (field) {
-          field.value = value;
-        }
-      });
-      elements.programImportStatus.textContent = "Imported.";
-      scheduleOnboardingDraft();
-      showToast("Imported program details", "success");
-    } catch (err) {
-      console.error(err);
-      elements.programImportStatus.textContent = "Import failed.";
-      showToast("Failed to import file", "error");
-    } finally {
-      setButtonLoading(elements.programImport, false);
-    }
+    const formData = new FormData(elements.planForm);
+    const onboarding = Object.fromEntries(formData.entries());
+    onboarding.days = Number(onboarding.days);
+    await saveProfile({ onboarding, units: onboarding.units || state.profile?.units || "lb" });
   });
   elements.refreshProgram.addEventListener("click", () => loadProgram().catch(console.error));
   elements.finalizeProgram.addEventListener("click", async () => {
     if (!ensureAuth()) return;
-    setButtonLoading(elements.finalizeProgram, true, "Finalizing...");
-    try {
-      await apiFetch("/api/program-finalize", { method: "POST" });
-      await apiFetch("/api/audit-log-event", {
-        method: "POST",
-        body: JSON.stringify({ type: "program_finalized", detail: "Program finalized" }),
-      });
-      await loadProgramRevisions().catch(console.error);
-      showToast("Program finalized", "success");
-    } catch (err) {
-      console.error(err);
-      showToast("Failed to finalize program", "error");
-    } finally {
-      setButtonLoading(elements.finalizeProgram, false);
-    }
+    await apiFetch("/api/program-finalize", { method: "POST" });
+    await apiFetch("/api/audit-log-event", {
+      method: "POST",
+      body: JSON.stringify({ type: "program_finalized", detail: "Program finalized" }),
+    });
   });
   elements.programChatSend.addEventListener("click", async () => {
     const prompt = elements.programChatInput.value.trim();
-    if (!ensureAuth()) return;
-    if (!prompt) {
-      showToast("Add a prompt first", "error");
-      return;
-    }
-    if (!state.program) {
-      showToast("Generate a program first", "error");
-      return;
-    }
-    setButtonLoading(elements.programChatSend, true, "Sending...");
-    try {
-      const response = await apiFetch("/api/ai", {
-        method: "POST",
-        body: JSON.stringify({ mode: "program_refine", prompt, program: state.program }),
-      });
-      elements.programChatResponse.textContent = response.message;
-      showToast("Refine request sent", "success");
-    } catch (err) {
-      console.error(err);
-      showToast("Failed to send refine request", "error");
-    } finally {
-      setButtonLoading(elements.programChatSend, false);
-    }
+    if (!prompt) return;
+    const response = await apiFetch("/api/ai", {
+      method: "POST",
+      body: JSON.stringify({ mode: "program_refine", prompt, program: state.program }),
+    });
+    elements.programChatResponse.textContent = response.message;
   });
   elements.programChatClear.addEventListener("click", () => {
     elements.programChatInput.value = "";
@@ -950,87 +576,32 @@ const setupListeners = () => {
   elements.saveWorkout.addEventListener("click", () => saveWorkoutLog().catch(console.error));
   elements.todayChatSend.addEventListener("click", async () => {
     const prompt = elements.todayChatInput.value.trim();
-    if (!ensureAuth()) return;
-    if (!prompt) {
-      showToast("Add a prompt first", "error");
-      return;
-    }
+    if (!prompt) return;
     const date = formatDate();
-    setButtonLoading(elements.todayChatSend, true, "Sending...");
-    try {
-      const workout = await apiFetch(`/api/workout-get?date=${date}`);
-      const response = await apiFetch("/api/ai", {
-        method: "POST",
-        body: JSON.stringify({ mode: "today_adjust", prompt, workout }),
-      });
-      elements.todayChatResponse.textContent = response.message;
-      showToast("Adjust request sent", "success");
-    } catch (err) {
-      console.error(err);
-      showToast("Failed to send adjust request", "error");
-    } finally {
-      setButtonLoading(elements.todayChatSend, false);
-    }
+    const workout = await apiFetch(`/api/workout-get?date=${date}`);
+    const response = await apiFetch("/api/ai", {
+      method: "POST",
+      body: JSON.stringify({ mode: "today_adjust", prompt, workout }),
+    });
+    elements.todayChatResponse.textContent = response.message;
   });
   elements.todayChatClear.addEventListener("click", () => {
     elements.todayChatInput.value = "";
     elements.todayChatResponse.textContent = "";
   });
   elements.addPr.addEventListener("click", async () => {
-    setButtonLoading(elements.addPr, true, "Saving...");
-    try {
-      const formData = new FormData(elements.prForm);
-      const pr = Object.fromEntries(formData.entries());
-      pr.weight = Number(pr.weight);
-      pr.reps = Number(pr.reps);
-      pr.rpe = pr.rpe ? Number(pr.rpe) : null;
-      await apiFetch("/api/pr-add", { method: "POST", body: JSON.stringify(pr) });
-      await loadPrs();
-      showToast("PR saved", "success");
-    } catch (err) {
-      console.error(err);
-      showToast("Failed to save PR", "error");
-    } finally {
-      setButtonLoading(elements.addPr, false);
-    }
+    const formData = new FormData(elements.prForm);
+    const pr = Object.fromEntries(formData.entries());
+    pr.weight = Number(pr.weight);
+    pr.reps = Number(pr.reps);
+    pr.rpe = pr.rpe ? Number(pr.rpe) : null;
+    await apiFetch("/api/pr-add", { method: "POST", body: JSON.stringify(pr) });
+    await loadPrs();
   });
   elements.unitsToggle.addEventListener("change", async (event) => {
     if (!ensureAuth()) return;
-    try {
-      await saveProfile({ units: event.target.value });
-      await loadPrs();
-      showToast("Units updated", "success");
-    } catch (err) {
-      console.error(err);
-      showToast("Failed to update units", "error");
-    }
-  });
-  elements.workoutDetail.addEventListener("click", (event) => {
-    const action = event.target?.dataset?.action;
-    if (!action) return;
-    const exerciseIndex = Number(event.target.dataset.exercise);
-    const inputs = [...elements.workoutDetail.querySelectorAll(`input[data-set="${exerciseIndex}"]`)];
-    if (!inputs.length) return;
-    const valuesBySet = inputs.reduce((acc, input) => {
-      const index = Number(input.dataset.index);
-      acc[index] = acc[index] || {};
-      acc[index][input.dataset.field] = input.value;
-      return acc;
-    }, {});
-    const sets = Object.values(valuesBySet);
-    if (!sets.length) return;
-    const source = action === "copy-last" ? sets.reverse().find((set) => set.weight || set.reps) : sets[0];
-    if (!source) return;
-    inputs.forEach((input) => {
-      if (action === "copy-last" || action === "fill-all") {
-        input.value = source[input.dataset.field] || input.value;
-      }
-    });
-  });
-  window.addEventListener("beforeunload", (event) => {
-    if (!state.planDirty) return;
-    event.preventDefault();
-    event.returnValue = "";
+    await saveProfile({ units: event.target.value });
+    await loadPrs();
   });
   window.addEventListener("hashchange", handleRoute);
   elements.resetPassword = document.getElementById("reset-password");

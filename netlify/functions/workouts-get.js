@@ -18,7 +18,7 @@ const buildWorkoutsFromProgram = (program) => {
   program.weeks.forEach((week) => {
     week.days.forEach((day) => {
       const date = formatDate(addDays(start, dayIndex));
-      workouts[date] = { completed: false, ...day, name: day.theme, date };
+      workouts[date] = { ...day, name: day.theme, date };
       dayIndex += 1;
     });
   });
