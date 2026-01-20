@@ -86,11 +86,6 @@
         <div class="panel">
           <h2>Plan Builder</h2>
           <p>Enter onboarding details to generate a structured 4-week program. Refinements use the AI coach for quick tweaks.</p>
-          <div class="upload-row">
-            <input type="file" id="program-import-file" accept="image/*,.txt,.pdf" />
-            <button class="secondary" id="program-import" type="button">Import from file/photo</button>
-            <span class="muted" id="program-import-status"></span>
-          </div>
           <form id="plan-form" class="form-grid">
             <label>
               Goal
@@ -147,9 +142,8 @@
             </label>
           </form>
           <div class="button-row">
-            <button class="primary" id="generate-program" type="button">Generate Program</button>
-            <button class="secondary" id="save-onboarding" type="button">Save Onboarding</button>
-            <span class="muted" id="plan-dirty-status"></span>
+            <button class="primary" id="generate-program">Generate Program</button>
+            <button class="secondary" id="save-onboarding">Save Onboarding</button>
           </div>
         </div>
 
@@ -157,18 +151,12 @@
           <div class="panel-header">
             <h2>Program Viewer</h2>
             <div class="button-row">
-              <button class="secondary" id="refresh-program" type="button">Reload</button>
-              <button class="primary" id="finalize-program" type="button">Finalize Program</button>
+              <button class="secondary" id="refresh-program">Reload</button>
+              <button class="primary" id="finalize-program">Finalize Program</button>
             </div>
           </div>
           <div id="program-tabs" class="tabs"></div>
           <div id="program-weeks" class="program-weeks"></div>
-        </div>
-
-        <div class="panel">
-          <h2>Program Revisions</h2>
-          <p class="muted">Saved revisions from program saves and finalizations.</p>
-          <div id="program-revisions" class="revision-list"></div>
         </div>
 
         <div class="panel">
@@ -177,8 +165,8 @@
           <div class="chat-panel">
             <textarea id="program-chat-input" rows="4" placeholder="E.g. Swap leg press for hack squat on Day 2"></textarea>
             <div class="button-row">
-              <button class="secondary" id="program-chat-send" type="button">Send</button>
-              <button class="ghost" id="program-chat-clear" type="button">Clear</button>
+              <button class="secondary" id="program-chat-send">Send</button>
+              <button class="ghost" id="program-chat-clear">Clear</button>
             </div>
             <pre id="program-chat-response" class="chat-output"></pre>
           </div>
@@ -189,14 +177,14 @@
         <div class="panel">
           <div class="panel-header">
             <h2>Workout Calendar</h2>
-            <button class="primary" id="today-workout" type="button">Today’s Workout</button>
+            <button class="primary" id="today-workout">Today’s Workout</button>
           </div>
           <div id="workout-calendar" class="calendar"></div>
         </div>
         <div class="panel">
           <div class="panel-header">
             <h2>Workout Detail</h2>
-            <button class="secondary" id="save-workout" type="button">Save Workout</button>
+            <button class="secondary" id="save-workout">Save Workout</button>
           </div>
           <div id="workout-detail"></div>
         </div>
@@ -206,8 +194,8 @@
           <div class="chat-panel">
             <textarea id="today-chat-input" rows="4" placeholder="E.g. Short on time today, reduce volume"></textarea>
             <div class="button-row">
-              <button class="secondary" id="today-chat-send" type="button">Send</button>
-              <button class="ghost" id="today-chat-clear" type="button">Clear</button>
+              <button class="secondary" id="today-chat-send">Send</button>
+              <button class="ghost" id="today-chat-clear">Clear</button>
             </div>
             <pre id="today-chat-response" class="chat-output"></pre>
           </div>
@@ -240,15 +228,11 @@
               <input type="number" name="rpe" min="1" max="10" step="0.5" />
             </label>
           </form>
-          <button class="primary" id="add-pr" type="button">Add PR</button>
+          <button class="primary" id="add-pr">Add PR</button>
         </div>
         <div class="panel">
           <h2>PR History</h2>
           <div id="pr-history"></div>
-        </div>
-        <div class="panel">
-          <h2>PR Insights</h2>
-          <div id="pr-summary" class="summary-grid"></div>
         </div>
         <div class="panel">
           <h2>Progress Chart</h2>
@@ -283,14 +267,9 @@
               <div id="client-detail"></div>
             </div>
           </div>
-          <div class="audit-log">
-            <h3>Audit Log</h3>
-            <div id="admin-audit-log"></div>
-          </div>
         </div>
       </section>
     </main>
   </div>
-  <div id="toast" class="toast"></div>
 </body>
 </html>

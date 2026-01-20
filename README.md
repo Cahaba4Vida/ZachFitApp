@@ -17,8 +17,6 @@ Set these in Netlify (or locally when running Netlify dev):
 - `OPENAI_API_KEY` (required)
 - `OPENAI_MODEL` (optional, default `gpt-4o-mini`)
 - `ADMIN_EMAIL_ALLOWLIST` (optional, default `edwardszachary647@gmail.com`)
-- `DATABASE_URL` (required, Postgres connection string for app data storage)
-- `DATABASE_SSL` (optional, set to `false` to disable SSL; defaults to SSL enabled)
 
 ## Local Development
 
@@ -70,3 +68,4 @@ All API routes are available under `/api/*` and map to Netlify functions.
 5. **PRs**: Add multiple PRs and confirm history + chart update.
 6. **Settings**: Toggle units and confirm save.
 7. **Admin**: Use allowlisted email to open Admin page; verify client detail + coach prompt link.
+

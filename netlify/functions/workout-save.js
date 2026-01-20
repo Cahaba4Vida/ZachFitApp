@@ -15,7 +15,7 @@ exports.handler = async (event) => {
   if (!valid) return error(400, "Invalid workout schema");
   const store = getUserStore(user.userId);
   const workouts = (await store.get("workouts")) || {};
-  workouts[date] = { completed: false, ...body.workout, date };
+  workouts[date] = { ...body.workout, date };
   await store.set("workouts", workouts);
   return json(200, workouts[date]);
 };

@@ -50,8 +50,6 @@ const workoutDaySchema = {
   additionalProperties: false,
   required: ["name", "theme", "exercises"],
   properties: {
-    date: { type: "string" },
-    completed: { type: "boolean" },
     name: { type: "string" },
     theme: { type: "string" },
     exercises: { type: "array", items: exerciseSchema },
