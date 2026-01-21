@@ -1,11 +1,11 @@
 const { requireAuth } = require("./_lib/auth");
 const { getUserStore } = require("./_lib/store");
-const { json } = require("./_lib/response");
+const { json, withErrorHandling } = require("./_lib/response");
 
-exports.handler = async (event) => {
+exports.handler = withErrorHandling(async (event) => {
   const { user, error } = requireAuth(event);
   if (error) return error;
   const store = getUserStore(user.userId);
   const prs = (await store.get("prs")) || [];
   return json(200, prs);
-};
+});

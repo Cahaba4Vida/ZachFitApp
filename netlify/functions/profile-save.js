@@ -1,10 +1,11 @@
 const { requireAuth } = require("./_lib/auth");
 const { getUserStore, getGlobalStore } = require("./_lib/store");
-const { json, error } = require("./_lib/response");
+const { json, error, withErrorHandling } = require("./_lib/response");
 const { parseBody, nowIso } = require("./_lib/utils");
+const { query } = require("./_lib/db");
 const { validateSchema } = require("./_lib/schema");
 
-exports.handler = async (event) => {
+exports.handler = withErrorHandling(async (event) => {
   const { user, error: authError } = requireAuth(event);
   if (authError) return authError;
   const body = parseBody(event);
@@ -23,6 +24,15 @@ exports.handler = async (event) => {
     return error(400, "Invalid profile schema");
   }
   await store.set("profile", profile);
+  if (body.onboarding) {
+    await query(
+      `INSERT INTO onboarding (user_id, data, created_at, updated_at)
+       VALUES ($1, $2, NOW(), NOW())
+       ON CONFLICT (user_id)
+       DO UPDATE SET data = EXCLUDED.data, updated_at = NOW()`,
+      [user.userId, body.onboarding]
+    );
+  }
   if (body.units && existing.units && body.units !== existing.units) {
     const convert = body.units === "kg" ? 1 / 2.20462 : 2.20462;
     const prs = (await store.get("prs")) || [];
@@ -66,4 +76,4 @@ exports.handler = async (event) => {
   ].slice(0, 200);
   await globalStore.set("clients", nextClients);
   return json(200, profile);
-};
+});

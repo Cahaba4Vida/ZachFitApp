@@ -1,6 +1,6 @@
 const { requireAuth } = require("./_lib/auth");
 const { getUserStore } = require("./_lib/store");
-const { json, error } = require("./_lib/response");
+const { json, error, withErrorHandling } = require("./_lib/response");
 const { parseBody, nowIso } = require("./_lib/utils");
 
 const buildSystemPrompt = (mode) => {
@@ -10,7 +10,7 @@ const buildSystemPrompt = (mode) => {
   return "You are a training coach. Provide a minimal JSON update for today's workout. Keep existing format.";
 };
 
-exports.handler = async (event) => {
+exports.handler = withErrorHandling(async (event) => {
   const { user, error: authError } = requireAuth(event);
   if (authError) return authError;
   const body = parseBody(event);
@@ -32,7 +32,6 @@ exports.handler = async (event) => {
         )}`,
       },
     ],
-    temperature: 0.2,
   };
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
@@ -59,4 +58,4 @@ exports.handler = async (event) => {
     await store.set("todayAdjustRevisions", [entry, ...revisions].slice(0, 10));
   }
   return json(200, { message });
-};
+});
