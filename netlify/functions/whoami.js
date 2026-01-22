@@ -4,7 +4,7 @@ const { json, withErrorHandling } = require("./_lib/response");
 const { nowIso } = require("./_lib/utils");
 
 exports.handler = withErrorHandling(async (event) => {
-  const { user, error } = requireAuth(event);
+  const { user, error } = await requireAuth(event);
   if (error) return error;
   const store = getUserStore(user.userId);
   const profile = (await store.get("profile")) || { units: "lb" };

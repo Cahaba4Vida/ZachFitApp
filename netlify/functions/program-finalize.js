@@ -6,7 +6,7 @@ const { query } = require("./_lib/db");
 const { validateSchema } = require("./_lib/schema");
 
 exports.handler = withErrorHandling(async (event) => {
-  const { user, error: authError } = requireAuth(event);
+  const { user, error: authError } = await requireAuth(event);
   if (authError) return authError;
   const result = await query(
     `SELECT program

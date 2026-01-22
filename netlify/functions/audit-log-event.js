@@ -5,7 +5,7 @@ const { parseBody, nowIso } = require("./_lib/utils");
 const { validateSchema } = require("./_lib/schema");
 
 exports.handler = withErrorHandling(async (event) => {
-  const { user, error: authError } = requireAuth(event);
+  const { user, error: authError } = await requireAuth(event);
   if (authError) return authError;
   const body = parseBody(event);
   if (!body?.type) return error(400, "Missing event type");

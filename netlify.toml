@@ -2,7 +2,15 @@
   publish = "."
   functions = "netlify/functions"
 
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/:splat"
+  status = 200
+
 [[headers]]
   for = "/*"
   [headers.values]
     Cache-Control = "no-store"
+
+[build.environment]
+  NODE_VERSION = "20"

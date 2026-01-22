@@ -11,7 +11,7 @@ const buildSystemPrompt = (mode) => {
 };
 
 exports.handler = withErrorHandling(async (event) => {
-  const { user, error: authError } = requireAuth(event);
+  const { user, error: authError } = await requireAuth(event);
   if (authError) return authError;
   const body = parseBody(event);
   if (!body?.mode || !body?.prompt) return error(400, "Missing mode or prompt");

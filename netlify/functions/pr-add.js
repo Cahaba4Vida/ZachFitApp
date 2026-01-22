@@ -7,7 +7,7 @@ const { validateSchema } = require("./_lib/schema");
 const estimate1Rm = (weight, reps) => Math.round(weight * (1 + reps / 30));
 
 exports.handler = withErrorHandling(async (event) => {
-  const { user, error: authError } = requireAuth(event);
+  const { user, error: authError } = await requireAuth(event);
   if (authError) return authError;
   const body = parseBody(event);
   if (!body) return error(400, "Invalid JSON");

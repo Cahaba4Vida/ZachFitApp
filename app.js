@@ -219,7 +219,8 @@ const bindListener = (element, eventName, handler) => {
 
 const handleActionError = (label, err) => {
   const message = err?.message || "Something went wrong.";
-  showToast(`${label} failed: ${message}`, "error");
+  const traceInfo = err?.traceId ? ` (trace ${err.traceId})` : "";
+  showToast(`${label} failed: ${message}${traceInfo}`, "error");
   recordDebugEntry(label, {
     status: err?.status || "error",
     body: err?.body || message,
@@ -676,7 +677,7 @@ const setupListeners = () => {
         body: JSON.stringify({ onboarding }),
         returnMeta: true,
       });
-      state.program = result.data;
+      state.program = result.data?.program || result.data;
       renderProgram();
       recordDebugEntry(label, {
         status: result.status,

@@ -80,3 +80,12 @@ All API routes are available under `/api/*` and map to Netlify functions.
 5. **PRs**: Add multiple PRs and confirm history + chart update.
 6. **Settings**: Toggle units and confirm save.
 7. **Admin**: Use allowlisted email to open Admin page; verify client detail + coach prompt link.
+
+
+## Deterministic installs (package-lock)
+
+This repo intentionally pins dependency versions in `package.json`. To generate a `package-lock.json` on your machine, run:
+
+- `npm install` (or `npm i`) in the repo root
+
+Netlify will then use the lockfile for deterministic installs.

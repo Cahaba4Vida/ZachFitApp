@@ -71,8 +71,10 @@ exports.handler = withErrorHandling(async (event) => {
     programsColumns: { ok: false, missing: [] },
   };
 
+  const timestamp = new Date().toISOString();
+  console.log(`[health] trace=${traceId}`);
   if (!checks.databaseUrl) {
-    return json(200, { ok: false, checks, traceId });
+    return json(200, { ok: false, checks, traceId, timestamp });
   }
 
   try {
@@ -80,7 +82,7 @@ exports.handler = withErrorHandling(async (event) => {
     await pool.query("SELECT 1");
     checks.postgresConnection = true;
   } catch (err) {
-    return json(200, { ok: false, checks, traceId });
+    return json(200, { ok: false, checks, traceId, timestamp });
   }
 
   const tableChecks = await checkTablesExist(["kv_store", "onboarding", "programs"]);
@@ -101,5 +103,5 @@ exports.handler = withErrorHandling(async (event) => {
     checks.kvStoreConstraint &&
     checks.programsColumns.ok;
 
-  return json(200, { ok, checks, traceId });
+  return json(200, { ok, checks, traceId, timestamp });
 });

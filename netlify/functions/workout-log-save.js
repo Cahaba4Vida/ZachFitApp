@@ -5,7 +5,7 @@ const { parseBody } = require("./_lib/utils");
 const { validateSchema } = require("./_lib/schema");
 
 exports.handler = withErrorHandling(async (event) => {
-  const { user, error: authError } = requireAuth(event);
+  const { user, error: authError } = await requireAuth(event);
   if (authError) return authError;
   const date = event.queryStringParameters?.date;
   if (!date) return error(400, "Missing date");

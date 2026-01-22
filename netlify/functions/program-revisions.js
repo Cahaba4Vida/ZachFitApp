@@ -3,7 +3,7 @@ const { getUserStore } = require("./_lib/store");
 const { json, withErrorHandling } = require("./_lib/response");
 
 exports.handler = withErrorHandling(async (event) => {
-  const { user, error } = requireAuth(event);
+  const { user, error } = await requireAuth(event);
   if (error) return error;
   const store = getUserStore(user.userId);
   const revisions = (await store.get("programRevisions")) || [];
