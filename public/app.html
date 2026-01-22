@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0f172a" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <title>Kansas Leader Insights</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+  </head>
+  <body>
+    <div id="toast-container" class="toast-container" aria-live="polite" aria-atomic="true"></div>
+    <header class="topbar">
+      <div>
+        <h1>KANSAS LEADER INSIGHTS</h1>
+        <p class="muted">Weekly execution tracker for team leaders.</p>
+      </div>
+      <div class="topbar-actions">
+        <div class="field">
+          <span>Team</span>
+          <select id="team-select"></select>
+        </div>
+        <div class="field">
+          <span>ISO Week</span>
+          <input id="iso-week" type="text" readonly />
+        </div>
+        <button id="save-week" class="primary" type="button">Save Week</button>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Roster</h2>
+          <button id="save-roster" class="secondary" type="button">
+            Save Roster
+          </button>
+        </div>
+        <button id="toggle-roster" class="secondary" type="button">
+          Show universal roster
+        </button>
+        <label class="field">
+          <span>Find member</span>
+          <input id="roster-filter" type="text" placeholder="Search by name" />
+        </label>
+        <div id="roster-list" class="stack"></div>
+        <div class="inline add-member">
+          <input id="new-member-name" type="text" placeholder="New member name" />
+          <input id="new-member-email" type="email" placeholder="Email (optional)" />
+          <input id="new-member-phone" type="text" placeholder="Phone (optional)" />
+          <select id="new-member-team"></select>
+          <button id="add-member" class="secondary" type="button">Add</button>
+        </div>
+        <div class="panel-divider"></div>
+        <div class="stack">
+          <strong id="team-roster-title">Team roster</strong>
+          <div id="team-roster-display" class="stack"></div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Weekly Execution</h2>
+          <span id="week-status" class="muted"></span>
+        </div>
+        <label class="field">
+          <span>Search individuals</span>
+          <input id="member-filter" type="text" placeholder="Search by name" />
+        </label>
+        <div id="weekly-tasks" class="stack"></div>
+        <button id="toggle-members" class="secondary" type="button">
+          Edit individuals
+        </button>
+        <div id="members-panel" class="stack"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2>History</h2>
+        </div>
+        <div id="weeks-list" class="stack"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Export</h2>
+        </div>
+        <div class="stack">
+          <button id="export-team" class="secondary" type="button">
+            Export Team History
+          </button>
+          <button id="export-all" class="secondary" type="button">
+            Export All Teams History
+          </button>
+          <button id="chat-insights" class="primary" type="button">
+            Chat Insights
+          </button>
+          <p id="export-status" class="muted"></p>
+        </div>
+
+          <details class="panel diagnostics" id="diagnostics">
+            <summary>Diagnostics</summary>
+            <div class="stack">
+              <div class="row">
+                <span class="muted">API Health</span>
+                <span id="diag-health" class="pill">Unknown</span>
+              </div>
+              <div class="row">
+                <span class="muted">Team / Week</span>
+                <span id="diag-context" class="mono">—</span>
+              </div>
+              <div class="row">
+                <span class="muted">Last Saved</span>
+                <span id="diag-saved" class="mono">—</span>
+              </div>
+              <div class="row">
+                <span class="muted">Trace ID</span>
+                <span id="diag-trace" class="mono">—</span>
+              </div>
+              <div class="row">
+                <span class="muted">Last Error</span>
+              </div>
+              <pre id="diag-error" class="code-block">—</pre>
+            </div>
+          </details>
+
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Settings</h2>
+        </div>
+        <div class="stack">
+          <label class="field">
+            <span>Actor</span>
+            <select id="actor-select">
+              <option value="Braxton">Braxton</option>
+              <option value="Brannon">Brannon</option>
+              <option value="Asher">Asher</option>
+              <option value="Danny">Danny</option>
+            </select>
+          </label>
+          <button id="clear-token" class="secondary" type="button">
+            Clear Token
+          </button>
+        </div>
+      </section>
+    </main>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <footer class="app-footer">
+      <span>© Designed by zachedwardsllc</span>
+    </footer>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

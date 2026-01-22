@@ -1,0 +1,15 @@
+CREATE TABLE IF NOT EXISTS weekly_tasks (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  week_id UUID NOT NULL REFERENCES weeks(id) ON DELETE CASCADE,
+  label TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS task_attendance (
+  task_id UUID NOT NULL REFERENCES weekly_tasks(id) ON DELETE CASCADE,
+  member_id UUID NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+  attended BOOLEAN NOT NULL DEFAULT FALSE,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (task_id, member_id)
+);
