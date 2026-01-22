@@ -27,7 +27,7 @@ const json = (statusCode, body, options = {}) => ({
 const error = (statusCode, message, details, options = {}) =>
   json(
     statusCode,
-    { error: message, details, statusCode, traceId: options.traceId, requestId: options.traceId },
+    { error: message, details, statusCode, traceId: options.traceId, requestId: options.traceId, ...(options.reason ? { reason: options.reason } : {}) },
     options
   );
 

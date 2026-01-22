@@ -43,56 +43,108 @@ const httpsGetJson = (url) =>
 const jwksCache = new Map(); // iss -> { fetchedAt, jwks }
 
 const getJwksForIssuer = async (iss) => {
-  // Netlify Identity (GoTrue) uses: <site>/.netlify/identity as issuer
-  const jwksUrl = `${iss.replace(/\/+$/, "")}/.well-known/jwks.json`;
-  const cached = jwksCache.get(jwksUrl);
+  const issTrim = String(iss || "").replace(/\/+$/, "");
+  const candidates = [];
+
+  // Common cases:
+  // 1) iss = https://<site>/.netlify/identity  -> JWKS at <iss>/.well-known/jwks.json
+  // 2) iss = https://<site>                  -> JWKS at <site>/.netlify/identity/.well-known/jwks.json
+  const hasIdentitySuffix = /\/\.netlify\/identity$/.test(issTrim);
+
+  // Always try the direct path first.
+  candidates.push(`${issTrim}/.well-known/jwks.json`);
+
+  // Also try the Netlify Identity well-known path (handles iss without /.netlify/identity).
+  if (!hasIdentitySuffix) {
+    candidates.push(`${issTrim}/.netlify/identity/.well-known/jwks.json`);
+  } else {
+    // In case issuer already ends with /.netlify/identity but JWKS is hosted at site root identity path
+    const siteRoot = issTrim.replace(/\/\.netlify\/identity$/, "");
+    candidates.push(`${siteRoot}/.netlify/identity/.well-known/jwks.json`);
+  }
+
   const now = Date.now();
-  if (cached && now - cached.fetchedAt < 10 * 60 * 1000) return cached.jwks; // 10 min
-  const jwks = await httpsGetJson(jwksUrl);
-  jwksCache.set(jwksUrl, { fetchedAt: now, jwks });
-  return jwks;
+  let lastErr = null;
+
+  for (const jwksUrl of candidates) {
+    const cached = jwksCache.get(jwksUrl);
+    if (cached && now - cached.fetchedAt < 10 * 60 * 1000) return cached.jwks; // 10 min
+
+    try {
+      const jwks = await httpsGetJson(jwksUrl);
+      jwksCache.set(jwksUrl, { fetchedAt: now, jwks });
+      return jwks;
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+
+  const err = new Error("JWKS fetch failed");
+  err.reason = "JWKS_FETCH_FAILED";
+  err.details = { iss: issTrim };
+  err.cause = lastErr;
+  throw err;
 };
 
 const verifyJwt = async (token) => {
   const parts = decodeJwtParts(token);
-  if (!parts) return null;
+  if (!parts) {
+    const err = new Error("JWT malformed");
+    err.reason = "JWT_MALFORMED";
+    throw err;
+  }
 
   const { header, payload, signature, signingInput } = parts;
 
-  // Basic token validity checks
   const nowSec = Math.floor(Date.now() / 1000);
   const skew = 60; // 60s clock skew tolerance
 
-  if (payload?.exp && nowSec > payload.exp + skew) return null;
-  if (payload?.nbf && nowSec + skew < payload.nbf) return null;
-
-  // Require an issuer to find keys
-  const iss = payload?.iss;
-  if (!iss) return null;
-
-  // Only support RS256 (Netlify Identity default)
-  const alg = header?.alg;
-  if (alg !== "RS256") return null;
-
-  let jwks;
-  try {
-    jwks = await getJwksForIssuer(iss);
-  } catch (e) {
-    console.error("Failed to fetch JWKS", e?.message || e);
-    return null;
+  if (payload?.exp && nowSec > payload.exp + skew) {
+    const err = new Error("JWT expired");
+    err.reason = "JWT_EXPIRED";
+    throw err;
   }
+  if (payload?.nbf && nowSec + skew < payload.nbf) {
+    const err = new Error("JWT not active");
+    err.reason = "JWT_NOT_ACTIVE";
+    throw err;
+  }
+
+  const iss = payload?.iss;
+  if (!iss) {
+    const err = new Error("JWT missing issuer");
+    err.reason = "JWT_NO_ISSUER";
+    throw err;
+  }
+
+  const alg = header?.alg;
+  if (alg !== "RS256") {
+    const err = new Error("Unsupported JWT alg");
+    err.reason = "JWT_UNSUPPORTED_ALG";
+    err.details = { alg };
+    throw err;
+  }
+
+  const jwks = await getJwksForIssuer(iss);
 
   const keys = Array.isArray(jwks?.keys) ? jwks.keys : [];
   const kid = header?.kid;
   const jwk = kid ? keys.find((k) => k.kid === kid) : keys[0];
-  if (!jwk) return null;
+  if (!jwk) {
+    const err = new Error("No matching JWK");
+    err.reason = "JWKS_KEY_NOT_FOUND";
+    err.details = { kid: kid || null };
+    throw err;
+  }
 
   let publicKey;
   try {
     publicKey = crypto.createPublicKey({ key: jwk, format: "jwk" });
   } catch (e) {
-    console.error("Failed to create public key from JWK", e?.message || e);
-    return null;
+    const err = new Error("Invalid JWK");
+    err.reason = "JWKS_KEY_INVALID";
+    err.cause = e;
+    throw err;
   }
 
   const ok = crypto.verify(
@@ -101,7 +153,11 @@ const verifyJwt = async (token) => {
     publicKey,
     signature
   );
-  if (!ok) return null;
+  if (!ok) {
+    const err = new Error("Bad JWT signature");
+    err.reason = "JWT_BAD_SIG";
+    throw err;
+  }
 
   return payload;
 };
@@ -116,20 +172,33 @@ const getUser = async (event) => {
   const token = getTokenFromEvent(event);
   if (!token) return null;
 
-  const payload = await verifyJwt(token);
-  if (!payload) return null;
+  try {
+    const payload = await verifyJwt(token);
+    return {
+      userId: payload.sub,
+      email: payload.email,
+      token,
+    };
+  } catch (e) {
+    // Stash a non-sensitive reason for diagnostics.
+    event.__authReason = e?.reason || "JWT_INVALID";
+    return null;
+  }
+};
 
-  return {
-    userId: payload.sub,
-    email: payload.email,
-    token,
-  };
 };
 
 const requireAuth = async (event) => {
   const user = await getUser(event);
   if (!user) {
-    return { error: error(401, "Unauthorized"), user: null };
+    return {
+      error: error(401, "Unauthorized", null, { reason: event.__authReason }),
+      user: null,
+    };
+  }
+  return { user };
+};
+
   }
   return { user };
 };

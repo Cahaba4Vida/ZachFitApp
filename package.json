@@ -1,12 +1,13 @@
 {
-  "name": "fit-hub",
+  "name": "zach-fit-app",
   "version": "1.0.0",
-  "description": "Fit Hub leader dashboard",
   "private": true,
-  "scripts": {
-    "dev": "npx serve public"
-  },
+  "description": "ZachFitApp - lightweight fitness coaching app",
   "dependencies": {
-    "pg": "^8.13.1"
+    "ajv": "8.12.0",
+    "pg": "8.13.1"
+  },
+  "engines": {
+    "node": "20.x"
   }
 }
