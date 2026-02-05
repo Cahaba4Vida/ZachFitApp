@@ -235,7 +235,7 @@ export default function App() {
           <div className="ff-route" key={location.pathname}>
 
             <Routes>
-            <Route path="/" element={<Landing me={me} />} />} />
+              <Route path="/" element={<Landing me={me} />} />
             <Route path="/onboarding" element={<Onboarding me={me} onDone={ctx.refreshMe} />} />
             <Route path="/today" element={<Today me={me} />} />
             <Route path="/settings" element={<Settings me={me} onSaved={ctx.refreshMe} />} />
@@ -594,7 +594,7 @@ function Admin({ me }: { me: MeResponse | null }) {
 
   return (
     <Routes>
-      <Route path="/" element={<Landing me={me} />} />
+              <Route path="/" element={<Landing me={me} />} />
       <Route path="growth" element={<GrowthControls />} />
       <Route path="approvals" element={<Approvals />} />
       <Route path="promos" element={<Promos />} />

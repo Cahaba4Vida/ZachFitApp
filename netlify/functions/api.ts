@@ -7,6 +7,7 @@ import { requireAuth, requireRole } from './_shared/auth';
 import { many, one, sql } from './_shared/db';
 import { getSystemSettings, isGrandfathered } from './_shared/gates';
 import { ensureBaseRows, getEntitlements, applyEntitlements, hasActivePromoBypass } from './_shared/entitlements';
+import { callResponsesAPI, extractJsonBlock, oneSentence } from './_shared/ai';
 
 const stripe = process.env.STRIPE_SECRET_KEY ? new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2024-06-20' } as any) : null;
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
