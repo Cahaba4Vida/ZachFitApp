@@ -216,6 +216,21 @@ export default function App() {
     setLang(data.settings.language);
     setProfileStatus('ready');
   } catch (e: any) {
+    const msg = String(e?.message || '');
+    const looksLikeAuth = /login required|forbidden|unauthorized/i.test(msg);
+
+    // If the backend says we aren't logged in, our Identity session is stale/missing a token.
+    // Clear it so the UI can recover (show login) instead of hanging.
+    if (looksLikeAuth) {
+      try { netlifyIdentity.logout(); } catch { /* ignore */ }
+      setIdentityUser(null);
+      setMe(null);
+      setLang('en');
+      setProfileStatus('idle');
+      setProfileError(null);
+      return;
+    }
+
     // Important: a backend failure is NOT the same as being logged out.
     // Only treat it as logout if we truly have no identity user.
     if (opts.treatFailureAsLogout || !netlifyIdentity.currentUser()) {
@@ -224,7 +239,7 @@ export default function App() {
       setIdentityUser(null);
     }
     setProfileStatus('error');
-    setProfileError(e?.message || 'Failed to load your profile');
+    setProfileError(msg || 'Failed to load your profile');
   } finally {
     setLoading(false);
   }

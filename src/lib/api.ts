@@ -18,7 +18,7 @@ async function getToken(): Promise<string | null> {
   if (!user) return null;
 
   // Fast path: many Identity builds keep the access token here.
-  const access = user?.token?.access_token;
+  const access = user?.token?.access_token || user?.tokenDetails?.access_token || user?.token?.accessToken || user?.tokenDetails?.accessToken;
   if (typeof access === 'string' && access.length > 0) return access;
 
   // GoTrue-style API: jwt(forceRefresh?) -> Promise<string>

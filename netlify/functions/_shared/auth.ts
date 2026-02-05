@@ -5,7 +5,11 @@ export type AuthUser = {
 
 function getOriginFromHeaders(headers: Record<string, string | undefined>): string | null {
   const proto = headers?.['x-forwarded-proto'] || 'https';
-  const host = headers?.['x-forwarded-host'] || headers?.['host'];
+  const host =
+    headers?.['x-forwarded-host'] ||
+    headers?.['host'] ||
+    (headers as any)?.['Host'];
+
   if (host) return `${proto}://${host}`;
 
   // Fallbacks (some environments omit host headers)
@@ -20,6 +24,21 @@ function getOriginFromHeaders(headers: Record<string, string | undefined>): stri
       // ignore
     }
   }
+
+  // Netlify provides these env vars in Functions
+  const envOrigin =
+    process.env.URL ||
+    process.env.DEPLOY_PRIME_URL ||
+    process.env.SITE_URL;
+
+  if (envOrigin) {
+    try {
+      return new URL(envOrigin).origin;
+    } catch {
+      // ignore
+    }
+  }
+
   return null;
 }
 
