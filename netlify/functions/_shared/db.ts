@@ -1,19 +1,17 @@
 import { neon } from '@neondatabase/serverless';
 
-const DATABASE_URL = process.env.DATABASE_URL;
-if (!DATABASE_URL) {
-  // eslint-disable-next-line no-console
-  console.warn('DATABASE_URL not set. Functions will fail until configured.');
+let _sql: ReturnType<typeof neon> | null = null;
+
+function init() {
+  const url = process.env.DATABASE_URL || process.env.NETLIFY_DATABASE_URL_UNPOOLED || '';
+  if (!url) throw new Error('DATABASE_URL is not configured');
+  if (!_sql) _sql = neon(url);
+  return _sql;
 }
 
-export const sql = neon(DATABASE_URL || '');
-
-export async function one<T>(query: string, params: any[] = []): Promise<T | null> {
-  const rows: any[] = await sql(query, params as any);
-  return rows[0] ?? null;
-}
-
-export async function many<T>(query: string, params: any[] = []): Promise<T[]> {
-  const rows: any[] = await sql(query, params as any);
-  return rows as T[];
-}
+// `getSql()` remains a tagged-template function compatible with `sql\`...\``.
+export const sql: ReturnType<typeof neon> = ((...args: any[]) => {
+  const s = init();
+  // @ts-ignore
+  return s(...args);
+}) as any;

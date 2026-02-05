@@ -1,5 +1,5 @@
 import type { Handler } from '@netlify/functions';
-import { sql } from './_shared/db';
+import { getSql } from './_shared/db';
 
 export const config = {
   schedule: '@daily'

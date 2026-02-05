@@ -475,3 +475,21 @@ pre {
   button:hover, button:active, .ff-card:hover, .ff-card:active, .ff-list-row:hover, .ff-list-row:active { transform: none !important; }
   body::after { animation: none !important; }
 }
+
+
+/* Phase 2: mobile-first tweaks */
+@media (max-width: 640px) {
+  .ff-nav {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .ff-card-pad {
+    padding: 14px !important;
+  }
+  .ff-btn, .ff-btn-primary {
+    width: 100%;
+  }
+  input, select, textarea {
+    font-size: 16px; /* prevent iOS zoom */
+  }
+}

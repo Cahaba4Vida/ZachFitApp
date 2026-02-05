@@ -1,3 +1,28 @@
+
+function isDbAvailable(): boolean {
+  return !!(process.env.DATABASE_URL && process.env.DATABASE_URL.length > 0);
+}
+
+function isWriteEndpoint(path: string, method: string): boolean {
+  const m = (method || 'GET').toUpperCase();
+  if (m !== 'POST' && m !== 'PUT' && m !== 'PATCH' && m !== 'DELETE') return false;
+
+  // Allow a few safe writes even without DB? (none in this app)
+  const allowWithoutDb = new Set<string>([
+    '/api/ping'
+  ]);
+  return !allowWithoutDb.has(path);
+}
+
+function dbUnavailable(path: string) {
+  return json(503, { error: 'db_unavailable', path });
+}
+
+function serverError(path: string, err: any) {
+  const msg = err?.message ? String(err.message) : 'unknown_error';
+  return json(500, { error: 'server_error', message: msg, path });
+}
+
 import type { Handler } from '@netlify/functions';
 import { z } from 'zod';
 import Stripe from 'stripe';
@@ -8,6 +33,10 @@ import { many, one, sql } from './_shared/db';
 import { getSystemSettings, isGrandfathered } from './_shared/gates';
 import { ensureBaseRows, getEntitlements, applyEntitlements, hasActivePromoBypass } from './_shared/entitlements';
 import { callResponsesAPI, extractJsonBlock, oneSentence } from './_shared/ai';
+import { normalizeModel } from './_shared/ai_model';
+import { handleToday } from './_routes/today';
+import { handleWorkoutLog } from './_routes/workout_log';
+import { handleOnboardingGenerate } from './_routes/onboarding_generate';
 
 const stripe = process.env.STRIPE_SECRET_KEY ? new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2024-06-20' } as any) : null;
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
@@ -77,10 +106,13 @@ function requireAdmin(userRole: string) {
 }
 
 export const handler: Handler = async (event, context) => {
+  // TOP_LEVEL_TRY_CATCH
+  try {
+  const authHeader = getHeader(event.headers, 'authorization');
   if (event.httpMethod === 'OPTIONS') return json(200, { ok: true });
 
   const path = getPath(event);
-  const auth = await requireAuth(event.headers.authorization || event.headers.Authorization, (context as any)?.clientContext?.user);
+  const auth = await requireAuth(authHeader, (context as any, (context as any)?.clientContext?.user, (event.headers || {}) as any)?.clientContext?.user);
 
   const rawBody = event.isBase64Encoded ? Buffer.from(event.body || '', 'base64').toString('utf8') : (event.body || '');
 
@@ -101,7 +133,41 @@ export const handler: Handler = async (event, context) => {
   };
 
   // Always try to upsert the user; if this fails, the rest of the app can't function anyway.
-  const userRow = await upsertUser(auth);
+  let userRow: any = null;
+try {
+  // Always try to upsert the user; if DB is unavailable (e.g., deploy preview without env vars),
+  // fall back to an identity-only response so the UI can proceed to onboarding.
+  userRow = await upsertUser(auth);
+} catch (e) {
+  return json(200, {
+    user: { id: auth.sub, email: auth.email, role: 'user', created_at: null },
+    settings: {
+      language: 'en',
+      units: 'imperial',
+      intensity_style: 'calm',
+      auto_adjust_mode: 'off',
+      analytics_horizon: 28,
+      ai_user_instructions: ''
+    },
+    onboarding: {
+      program_created: false,
+      forms_signed_all: true,
+      forms_due_at: null,
+      forms_required_now: false,
+      is_unlocked: true
+    },
+    entitlements: {
+      can_use_ai: false,
+      can_generate_program: false,
+      can_adjust_future: false,
+      free_cycles_remaining: 0
+    },
+    growth_mode: false,
+    ai_status: { enabled: false, reason: 'db_unavailable' },
+    db_unavailable: true
+  });
+}
+
 
   const ent = await safe(
     () => getEntitlements(userRow.id),
@@ -162,7 +228,41 @@ export const handler: Handler = async (event, context) => {
 
 if (!auth) return forbidden('Login required');
 ('Login required');
-    const userRow = await upsertUser(auth);
+    let userRow: any = null;
+try {
+  // Always try to upsert the user; if DB is unavailable (e.g., deploy preview without env vars),
+  // fall back to an identity-only response so the UI can proceed to onboarding.
+  userRow = await upsertUser(auth);
+} catch (e) {
+  return json(200, {
+    user: { id: auth.sub, email: auth.email, role: 'user', created_at: null },
+    settings: {
+      language: 'en',
+      units: 'imperial',
+      intensity_style: 'calm',
+      auto_adjust_mode: 'off',
+      analytics_horizon: 28,
+      ai_user_instructions: ''
+    },
+    onboarding: {
+      program_created: false,
+      forms_signed_all: true,
+      forms_due_at: null,
+      forms_required_now: false,
+      is_unlocked: true
+    },
+    entitlements: {
+      can_use_ai: false,
+      can_generate_program: false,
+      can_adjust_future: false,
+      free_cycles_remaining: 0
+    },
+    growth_mode: false,
+    ai_status: { enabled: false, reason: 'db_unavailable' },
+    db_unavailable: true
+  });
+}
+
 
     // ===== Liability forms gate (after 7 days of use) =====
     // Allow: viewing /me, signing forms, pings, and basic settings even when gated.
@@ -190,155 +290,51 @@ if (!auth) return forbidden('Login required');
 
     
     // ===== Program generation (AI stub seeds a demo program) =====
-    if (path === '/api/onboarding/program/generate' && event.httpMethod === 'POST') {
-      if (!(await canUseAi(userRow))) return forbidden('AI pending approval or not entitled');
-
-      
-      const today = new Date();
-      const startIso = today.toISOString().slice(0, 10);
-      const endIso = new Date(today.getTime() + 27 * 86400000).toISOString().slice(0, 10);
-      const programId = crypto.randomUUID();
-
-      // Create program shell
-      await sql(
-        `insert into programs(id,user_id,status,start_date,end_date,generated_from_program_id,generation_source)
-         values ($1,$2,'active',$3,$4,null,'ai')
-         on conflict do nothing`,
-        [programId, userRow.id, startIso, endIso]
-      );
-
-      // Load basic profile/settings for personalization
-      const profile = await one<any>('select * from profiles where user_id=$1', [userRow.id]);
-
-      // Build program with OpenAI (Responses API). If not configured or parse fails, fallback to a sane seeded plan.
-      const openaiKey = process.env.OPENAI_API_KEY;
-      const openaiModel = process.env.OPENAI_MODEL || 'gpt-5';
-      let plan: any | null = null;
-
-      if (openaiKey) {
-        const userPrefs = (userRow.ai_user_instructions || '').trim();
-        const instructions = [
-          'You are a strength and hypertrophy programming assistant.',
-          'Return ONLY JSON (no markdown) matching the provided schema.',
-          'Constraints:',
-          '- Do not give medical advice. If injury/pain is mentioned, keep substitutions conservative.',
-          '- Keep weekly volume change within 10%.',
-          '- Use the user\'s units and intensity_style (rpe/percent/none).',
-          'Schema:',
-          '{ "days": [ { "week_index": 1, "day_index": 1, "name": "Training Day 1", "exercises": [ { "slug": "bench_press", "name": "Bench Press", "prescription": { "sets": 3, "reps": 5, "load": 100, "rpe": 6 } } ] } ] }',
-          'Notes: Provide 4 weeks * 4 days = 16 days total for v1. Keep exercise list simple and repeatable.',
-          userPrefs ? `User preferences (non-authoritative): ${userPrefs}` : ''
-        ].filter(Boolean).join('\n');
-
-        const input = {
-          profile,
-          settings: {
-            units: userRow.units,
-            intensity_style: userRow.intensity_style,
-            days_per_week: profile?.days_per_week ?? 4,
-            focus: profile?.focus ?? 'hybrid',
-            experience_level: profile?.experience_level ?? 'novice',
-            equipment_profile: profile?.equipment_profile ?? 'full_gym',
-            training_emphasis: profile?.training_emphasis ?? 'balanced'
-          }
-        };
-
-        try {
-          const text = await callResponsesAPI(input, instructions, { apiKey: openaiKey, model: openaiModel });
-          plan = extractJsonBlock(text);
-        } catch (e: any) {
-          console.error('OpenAI program generation failed:', e?.message || e);
-          plan = null;
-        }
-      }
-
-      // Fallback plan if AI not configured or parse failed
-      if (!plan || !Array.isArray(plan.days)) {
-        plan = {
-          days: Array.from({ length: 16 }).map((_, i) => {
-            const idx = i + 1;
-            const week = Math.floor((idx - 1) / 4) + 1;
-            const di = ((idx - 1) % 4) + 1;
-            const lift = ['bench_press', 'squat', 'deadlift', 'overhead_press'][di - 1];
-            const name = lift.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-            return {
-              week_index: week,
-              day_index: di,
-              name: `Training Day ${idx}`,
-              exercises: [
-                { slug: lift, name, prescription: { sets: 3, reps: 5, load: 100, rpe: 6 } }
-              ]
-            };
-          })
-        };
-      }
-
-      // Ensure exercise library entries exist and map slug->id
-      const slugs = Array.from(new Set(plan.days.flatMap((d: any) => (d.exercises || []).map((x: any) => x.slug)).filter(Boolean)));
-      for (const s of slugs) {
-        const nm = String(s).replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-        await sql(
-          `insert into exercises(id,slug,name) values ($1,$2,$3)
-           on conflict (slug) do update set name=excluded.name`,
-          [crypto.randomUUID(), s, nm]
-        );
-      }
-      const exRows = await many<any>('select id,slug,name from exercises where slug = any($1::text[])', [slugs]);
-      const slugToId = new Map<string, string>(exRows.map((r: any) => [r.slug, r.id]));
-
-      // Insert program days and exercises, scheduled on consecutive days starting today
-      let dayCursor = new Date(today.getTime());
-      for (const d of plan.days) {
-        const pdId = crypto.randomUUID();
-        const scheduled = dayCursor.toISOString().slice(0,10);
-
-        await sql(
-          `insert into program_days(id,program_id,week_index,day_index,name,scheduled_date)
-           values ($1,$2,$3,$4,$5,$6)
-           on conflict do nothing`,
-          [pdId, programId, d.week_index, d.day_index, d.name || 'Training Day', scheduled]
-        );
-
-        let order = 1;
-        for (const ex of (d.exercises || [])) {
-          const exId = slugToId.get(ex.slug);
-          if (!exId) continue;
-          await sql(
-            `insert into day_exercises(id,program_day_id,exercise_id,order_index,prescription)
-             values ($1,$2,$3,$4,$5::jsonb)
-             on conflict do nothing`,
-            [crypto.randomUUID(), pdId, exId, order, JSON.stringify(ex.prescription || { sets: 3, reps: 5, load: 0 })]
-          );
-          order++;
-        }
-
-        dayCursor = new Date(dayCursor.getTime() + 86400000);
-      }
-
-      // ensure onboarding row exists
-      await sql(
-        `insert into onboarding(user_id,is_unlocked) values ($1,true)
-         on conflict (user_id) do nothing`,
-        [userRow.id]
-      );
-
-      // seed trial entitlements if absent (first free program)
-      const ent = await one<any>('select user_id from entitlements where user_id=$1', [userRow.id]);
-      if (!ent) {
-        await applyEntitlements(
-          userRow.id,
-          { can_use_ai: true, can_generate_program: true, can_adjust_future: true, free_cycles_remaining: 1 },
-          'system'
-        );
-      }
-return json(200, { ok: true, program_id: programId });
+    if (path === '/api/onboarding/program/generate') {
+      return await handleOnboardingGenerate({ event, userRow, sql, one, many, json, forbidden, canUseAi });
     }
+
+
 
 
     // ===== Admin: DB usage =====
     if (path === '/api/admin/db-usage' && event.httpMethod === 'GET') {
       if (!auth) return forbidden('Login required');
-      const userRow = await upsertUser(auth);
+      let userRow: any = null;
+try {
+  // Always try to upsert the user; if DB is unavailable (e.g., deploy preview without env vars),
+  // fall back to an identity-only response so the UI can proceed to onboarding.
+  userRow = await upsertUser(auth);
+} catch (e) {
+  return json(200, {
+    user: { id: auth.sub, email: auth.email, role: 'user', created_at: null },
+    settings: {
+      language: 'en',
+      units: 'imperial',
+      intensity_style: 'calm',
+      auto_adjust_mode: 'off',
+      analytics_horizon: 28,
+      ai_user_instructions: ''
+    },
+    onboarding: {
+      program_created: false,
+      forms_signed_all: true,
+      forms_due_at: null,
+      forms_required_now: false,
+      is_unlocked: true
+    },
+    entitlements: {
+      can_use_ai: false,
+      can_generate_program: false,
+      can_adjust_future: false,
+      free_cycles_remaining: 0
+    },
+    growth_mode: false,
+    ai_status: { enabled: false, reason: 'db_unavailable' },
+    db_unavailable: true
+  });
+}
+
       try {
         requireRole('admin', userRow.role);
       } catch {
@@ -461,7 +457,7 @@ return json(200, { ok: true, program_id: programId });
       if (!stripe) return badRequest('Stripe not configured');
       if (!policy.stripe_price_id_annual) return badRequest('Annual price not configured for this code');
 
-      const appUrl = process.env.APP_URL || process.env.URL || 'http://localhost:8888';
+      const appUrl = getBaseUrl((event.headers || {}) as any) || '';
       const session = await stripe.checkout.sessions.create({
         mode: 'subscription',
         line_items: [{ price: policy.stripe_price_id_annual, quantity: 1 }],
@@ -601,111 +597,17 @@ return json(200, { ok: true, program_id: programId });
     // ===== Chat adjust (AI stub) =====
     
     // ===== Today + logging =====
-    if (path === '/api/today' && event.httpMethod === 'GET') {
-      const prog = await one<any>(
-        `select id,start_date,end_date from programs where user_id=$1 and status='active' order by created_at desc limit 1`,
-        [userRow.id]
-      ).catch(() => null);
-
-      if (!prog) return json(200, { has_program: false });
-
-      const startDate = new Date(String(prog.start_date) + 'T00:00:00Z');
-      const now = new Date();
-      const dayNumber = Math.min(28, Math.max(1, Math.floor((now.getTime() - startDate.getTime()) / 86400000) + 1));
-
-      const pd = await one<any>(
-        `select id,day_index,scheduled_date,name from program_days where program_id=$1 and day_index=$2`,
-        [prog.id, dayNumber]
-      ).catch(() => null);
-
-      if (!pd) return json(200, { has_program: true, program: prog, day: null });
-
-      const exRows = await many<any>(
-        `select de.order_index, e.name, e.slug, de.prescription
-         from day_exercises de
-         join exercises e on e.id = de.exercise_id
-         where de.program_day_id=$1
-         order by de.order_index asc`,
-        [pd.id]
-      );
-
-      return json(200, {
-        has_program: true,
-        program: { id: prog.id, start_date: prog.start_date, end_date: prog.end_date },
-        day: { id: pd.id, day_index: pd.day_index, scheduled_date: pd.scheduled_date, name: pd.name },
-        exercises: exRows
-      });
+    if (path === '/api/today') {
+      return await handleToday({ event, userId: userRow.id, one, many, json });
     }
 
-    if (path === '/api/workout/log' && event.httpMethod === 'POST') {
-      const body = JSON.parse(event.body || '{}');
-      const schema = z.object({
-        program_day_id: z.string().uuid().optional().nullable(),
-        status: z.enum(['completed','partial','skipped']).default('completed'),
-        log_as_prescribed: z.boolean().optional().default(false),
-        sets: z.array(z.object({
-          exercise_slug: z.string(),
-          set_index: z.number().int().min(1),
-          reps: z.number().int().min(0),
-          load: z.number(),
-          rpe: z.number().optional().nullable()
-        })).optional().default([]),
-        deviations: z.array(z.object({
-          type: z.string(),
-          reason_category: z.string(),
-          diff: z.any(),
-          approval_source: z.enum(['bot','user']).optional()
-        })).optional().default([])
-      });
-      const parsed = schema.parse(body);
-      const workoutId = crypto.randomUUID();
-      await sql(
-        `insert into workouts(id,user_id,program_day_id,status) values ($1,$2,$3,$4)`,
-        [workoutId, userRow.id, parsed.program_day_id || null, parsed.status]
-      );
 
-      // If log_as_prescribed, create sets based on prescription with placeholder loads (0)
-      if (parsed.log_as_prescribed && parsed.program_day_id) {
-        const exRows = await many<any>(
-          `select e.slug, e.id as exercise_id, de.prescription
-           from day_exercises de join exercises e on e.id=de.exercise_id
-           where de.program_day_id=$1 order by de.order_index asc`,
-          [parsed.program_day_id]
-        );
-        for (const ex of exRows) {
-          const sets = Number(ex.prescription?.sets || 0);
-          const reps = Number(ex.prescription?.reps || 0);
-          for (let i = 1; i <= sets; i++) {
-            await sql(
-              `insert into workout_sets(id,workout_id,exercise_id,set_index,reps,load,rpe,is_warmup)
-               values ($1,$2,$3,$4,$5,$6,$7,false)`,
-              [crypto.randomUUID(), workoutId, ex.exercise_id, i, reps, 0, null]
-            );
-          }
-        }
-      } else {
-        // Manual sets
-        for (const s of parsed.sets) {
-          const ex = await one<any>(`select id from exercises where slug=$1`, [s.exercise_slug]).catch(() => null);
-          if (!ex) continue;
-          await sql(
-            `insert into workout_sets(id,workout_id,exercise_id,set_index,reps,load,rpe,is_warmup)
-             values ($1,$2,$3,$4,$5,$6,$7,false)`,
-            [crypto.randomUUID(), workoutId, ex.id, s.set_index, s.reps, s.load, s.rpe ?? null]
-          );
-        }
-      }
 
-      for (const d of parsed.deviations) {
-        await sql(
-          `insert into deviations(id,workout_id,type,diff,reason_category,approval_source)
-           values ($1,$2,$3,$4,$5,$6)`,
-          [crypto.randomUUID(), workoutId, d.type, d.diff, d.reason_category, d.approval_source || 'user']
-        );
-      }
-
-      return json(200, { ok: true, workout_id: workoutId });
+    if (path === '/api/workout/log') {
+      return await handleWorkoutLog({ event, userId: userRow.id, sql, one, many, json });
     }
+
+
 
 
     // ===== Chat adjust (one-sentence responses + adjusted plan stored as override) =====
@@ -730,7 +632,7 @@ return json(200, { ok: true, program_id: programId });
       );
 
       const openaiKey = process.env.OPENAI_API_KEY;
-      const openaiModel = process.env.OPENAI_MODEL || 'gpt-5';
+      const openaiModel = normalizeModel(process.env.OPENAI_MODEL || 'gpt-5');
       const userPrefs = (userRow.ai_user_instructions || '').trim();
 
       let message = 'Adjusted today to match your request.';
@@ -820,3 +722,15 @@ return json(200, { ok: true, program_id: programId });
     return json(500, { error: 'server_error' });
   }
 };
+function getBaseUrl(headers: Record<string, string | undefined>) {
+  const proto = headers['x-forwarded-proto'] || 'https';
+  const host = headers['x-forwarded-host'] || headers['host'];
+  return host ? `${proto}://${host}` : '';
+}
+
+
+
+} catch (e: any) {
+  console.error('[api] server_error', { path: event.path, method: event.httpMethod, message: e?.message, stack: e?.stack });
+  return serverError(event.path || 'unknown', e);
+}

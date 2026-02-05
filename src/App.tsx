@@ -75,7 +75,9 @@ function Nav({ me }: { me: MeResponse | null }) {
   return (
     <nav className="ff-nav">
       <NavLink to="/" end className={({ isActive }) => (isActive ? 'active' : undefined)}>Home</NavLink>
-      {me && <NavLink to="/today" className={({ isActive }) => (isActive ? 'active' : undefined)}>Today</NavLink>}
+      {me && <NavLink to="/today" className={({ isActive }) => (isActive ? 'active' : undefined)}>Today</NavLink>
+          <NavLink to="/progress" className={({ isActive }) => (isActive ? 'active' : undefined)}>Progress</NavLink>
+          <NavLink to="/history" className={({ isActive }) => (isActive ? 'active' : undefined)}>History</NavLink>}
       {me && <NavLink to="/inbox" className={({ isActive }) => (isActive ? 'active' : undefined)}>Inbox</NavLink>}
       {me && <NavLink to="/settings" className={({ isActive }) => (isActive ? 'active' : undefined)}>Settings</NavLink>}
       {me && (role === 'admin' || role === 'super_admin') && (
@@ -173,8 +175,19 @@ function SplashScreen({ phase }: { phase: 'show' | 'hide' }) {
 
 export default function App() {
   const [me, setMe] = useState<MeResponse | null>(null);
+  const [identityUser, setIdentityUser] = useState<any>(() => netlifyIdentity.currentUser());
+  const [profileStatus, setProfileStatus] = useState<'idle'|'loading'|'ready'|'error'>('idle');
+  const [profileError, setProfileError] = useState<string | null>(null);
+
+  const [banner, setBanner] = useState<string | null>(null);
+  const [onbGoal, setOnbGoal] = useState<'strength'|'hypertrophy'|'fat_loss'>('strength');
+  const [onbExperience, setOnbExperience] = useState<'beginner'|'intermediate'|'advanced'>('beginner');
+  const [onbDays, setOnbDays] = useState<number>(3);
+  const [onbEquipment, setOnbEquipment] = useState<string>('full_gym');
+  const [onbConstraints, setOnbConstraints] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const location = useLocation();
+  const nav = useNavigate();
 
   const [splashPhase, setSplashPhase] = useState<'show' | 'hide' | 'gone'>('show');
 
@@ -189,31 +202,65 @@ export default function App() {
   }, []);
 
 
-  const refreshMe = async () => {
-    setLoading(true);
-    try {
-      const data = await api.get<MeResponse>('/api/me');
-      setMe(data);
-      setLang(data.settings.language);
-    } catch {
+  const refreshMe = async (opts: { treatFailureAsLogout?: boolean } = {}) => {
+  setLoading(true);
+  setProfileStatus('loading');
+  setProfileError(null);
+  try {
+    const data = await api.get<MeResponse>('/api/me');
+    setMe(data);
+    setLang(data.settings.language);
+    setProfileStatus('ready');
+  } catch (e: any) {
+    // Important: a backend failure is NOT the same as being logged out.
+    // Only treat it as logout if we truly have no identity user.
+    if (opts.treatFailureAsLogout || !netlifyIdentity.currentUser()) {
       setMe(null);
       setLang('en');
-    } finally {
-      setLoading(false);
+      setIdentityUser(null);
     }
-  };
+    setProfileStatus('error');
+    setProfileError(e?.message || 'Failed to load your profile');
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   useEffect(() => {
-    const onLogin = () => refreshMe();
-    const onLogout = () => refreshMe();
-    netlifyIdentity.on('login', onLogin);
-    netlifyIdentity.on('logout', onLogout);
-    refreshMe();
-    return () => {
-      netlifyIdentity.off('login', onLogin);
-      netlifyIdentity.off('logout', onLogout);
-    };
-  }, []);
+  const onLogin = (user: any) => {
+    setIdentityUser(user);
+    // Go to a dedicated callback route that waits for a usable token and bootstraps the app state.
+    if (location.pathname !== '/auth/callback') nav('/auth/callback', { replace: true });
+  };
+  const onLogout = () => {
+    setIdentityUser(null);
+    setMe(null);
+    setProfileStatus('idle');
+    setProfileError(null);
+    setLang('en');
+    if (location.pathname !== '/') nav('/', { replace: true });
+  };
+
+  netlifyIdentity.on('login', onLogin);
+  netlifyIdentity.on('logout', onLogout);
+
+  // On initial load, if an identity session exists, bootstrap via callback.
+  const u = netlifyIdentity.currentUser();
+  if (u) {
+    setIdentityUser(u);
+    if (location.pathname !== '/auth/callback') nav('/auth/callback', { replace: true });
+  } else {
+    // Not logged in: we can attempt /me, but failures should be treated as logged out.
+    void refreshMe({ treatFailureAsLogout: true });
+  }
+
+  return () => {
+    netlifyIdentity.off('login', onLogin);
+    netlifyIdentity.off('logout', onLogout);
+  };
+}, []);
+
 
   useEffect(() => {
     // refresh auth-gated views on route change
@@ -235,9 +282,12 @@ export default function App() {
           <div className="ff-route" key={location.pathname}>
 
             <Routes>
-              <Route path="/" element={<Home me={me} />} />
+              <Route path="/auth/callback" element={<AuthCallback me={me} setMe={setMe} refreshMe={refreshMe} profileStatus={profileStatus} profileError={profileError} />} />
+            <Route path="/" element={<Home me={me} isAuthed={!!identityUser} profileStatus={profileStatus} profileError={profileError} />} />
             <Route path="/onboarding" element={<Onboarding me={me} onDone={ctx.refreshMe} />} />
             <Route path="/today" element={<Today me={me} />} />
+            <Route path="/progress" element={<Progress me={me} />} />
+            <Route path="/history" element={<History me={me} />} />
             <Route path="/settings" element={<Settings me={me} onSaved={ctx.refreshMe} />} />
             <Route path="/inbox" element={<Inbox me={me} />} />
             <Route path="/admin/*" element={<Admin me={me} />} />
@@ -252,7 +302,102 @@ export default function App() {
 }
 
 
-function Home({ me }: { me: MeResponse | null }) {
+
+
+function AuthCallback({
+  me,
+  setMe,
+  refreshMe,
+  profileStatus,
+  profileError,
+}: {
+  me: MeResponse | null;
+  setMe: (m: MeResponse | null) => void;
+  refreshMe: (opts?: { treatFailureAsLogout?: boolean }) => Promise<void>;
+  profileStatus: 'idle'|'loading'|'ready'|'error';
+  profileError: string | null;
+}) {
+  const nav = useNavigate();
+
+  const waitForJwt = async () => {
+    const user = netlifyIdentity.currentUser();
+    if (!user) throw new Error('No identity session');
+    // Retry a few times—right after signup the token can be briefly unavailable.
+    let lastErr: any = null;
+    for (let i = 0; i < 6; i++) {
+      try {
+        // Prefer non-forced jwt first (less fragile), then fall back to forced refresh.
+        const tok = await (user.jwt ? user.jwt() : Promise.resolve((user as any).token?.access_token));
+        if (tok) return tok;
+      } catch (e) {
+        lastErr = e;
+      }
+      await new Promise((r) => setTimeout(r, 250 * (i + 1)));
+    }
+    // final attempt forced
+    try {
+      const tok = await (user.jwt ? user.jwt(true) : Promise.resolve(null));
+      if (tok) return tok;
+    } catch (e) {
+      lastErr = e;
+    }
+    throw new Error(lastErr?.message || 'Token not ready');
+  };
+
+  const bootstrap = async () => {
+    await waitForJwt();
+    await refreshMe({ treatFailureAsLogout: false });
+  };
+
+  useEffect(() => {
+    void bootstrap();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!me) return;
+    if (me.onboarding.program_created) nav('/today', { replace: true });
+    else nav('/onboarding', { replace: true });
+  }, [me, nav]);
+
+  const loggedInEmail = (() => {
+    const u = netlifyIdentity.currentUser();
+    return u?.email || u?.user_metadata?.email || '';
+  })();
+
+  return (
+    <div className="ff-fade-in" style={{ maxWidth: 560, margin: '22px auto 0' }}>
+      <div className="ff-card ff-card-pad">
+        <h1 style={{ marginBottom: 8 }}>Setting up your account…</h1>
+        <p className="ff-text-3" style={{ marginTop: 0 }}>
+          {loggedInEmail ? `Signed in as ${loggedInEmail}` : 'Signed in'}
+        </p>
+
+        {profileStatus === 'loading' && (
+          <div className="ff-text-3" style={{ marginTop: 10 }}>Loading your profile…</div>
+        )}
+
+        {profileStatus === 'error' && (
+          <div style={{ marginTop: 12 }}>
+            <div className="ff-badge ff-badge-warn">Couldn’t load your profile</div>
+            <div className="ff-text-3" style={{ marginTop: 8, fontSize: 12 }}>
+              {profileError || 'Please try again.'}
+            </div>
+            <div style={{ display: 'flex', gap: 10, marginTop: 12, flexWrap: 'wrap' }}>
+              <button className="ff-btn-primary" onClick={() => void bootstrap()}>Retry</button>
+              <button className="ff-btn" onClick={() => netlifyIdentity.logout()}>Log out</button>
+            </div>
+          </div>
+        )}
+
+        {profileStatus === 'ready' && (
+          <div className="ff-text-3" style={{ marginTop: 10 }}>Redirecting…</div>
+        )}
+      </div>
+    </div>
+  );
+}
+function Home({ me, isAuthed, profileStatus, profileError }: { me: MeResponse | null; isAuthed: boolean; profileStatus: 'idle'|'loading'|'ready'|'error'; profileError: string | null }) {
   const nav = useNavigate();
   useEffect(() => {
     if (!me) return;
@@ -261,21 +406,43 @@ function Home({ me }: { me: MeResponse | null }) {
   }, [me, nav]);
 
   if (!me) {
+  // If Identity says we're logged in, don't bounce the user back to the login screen.
+  if (isAuthed) {
     return (
       <div className="ff-fade-in" style={{ maxWidth: 560, margin: '22px auto 0' }}>
         <div className="ff-card ff-card-pad">
-          <h1 style={{ marginBottom: 8 }}>FITFLOW</h1>
-          <p>{t('home_logged_out')}</p>
-          <div style={{ marginTop: 14 }}>
-            <button className="ff-btn-primary" onClick={() => netlifyIdentity.open()}>{t('login')}</button>
-          </div>
-          <div className="ff-muted-2" style={{ marginTop: 12, fontSize: 13 }}>
-            Premium training. Calm execution.
-          </div>
+          <h1 style={{ marginBottom: 8 }}>Signed in</h1>
+          {profileStatus === 'loading' && <p className="ff-text-3">Loading your profile…</p>}
+          {profileStatus === 'error' && (
+            <>
+              <div className="ff-badge ff-badge-warn">Profile load failed</div>
+              <p className="ff-text-3" style={{ marginTop: 10 }}>{profileError || 'Please retry.'}</p>
+              <div style={{ display: 'flex', gap: 10, marginTop: 12, flexWrap: 'wrap' }}>
+                <Link className="ff-btn-primary" to="/auth/callback">Retry</Link>
+                <button className="ff-btn" onClick={() => netlifyIdentity.logout()}>Log out</button>
+              </div>
+            </>
+          )}
+          {profileStatus === 'idle' && (
+            <div style={{ marginTop: 12 }}>
+              <Link className="ff-btn-primary" to="/auth/callback">Continue</Link>
+            </div>
+          )}
         </div>
       </div>
     );
   }
+
+  return (
+    <div className="ff-fade-in" style={{ maxWidth: 560, margin: '22px auto 0' }}>
+      <div className="ff-card ff-card-pad">
+        <h1 style={{ marginBottom: 8 }}>FITFLOW</h1>
+        <p>{t('home_logged_out')}</p>
+        <div style={{ marginTop: 14 }}>
+          <button className="ff-btn-primary" onClick={() => netlifyIdentity.open()}>{t('login')}</button>
+        </div>
+        <div 
+
 
   return <div className="ff-muted">Redirecting…</div>;
 }
@@ -291,7 +458,50 @@ function Onboarding({ me, onDone }: { me: MeResponse | null; onDone: () => void 
       <h2>{t('onboarding_title')}</h2>
       <p>{t('onboarding_desc')}</p>
 
-      <ol className="ff-card ff-card-pad" style={{ margin: 0, paddingLeft: 18 }}>
+      <div className="ff-card ff-card-pad" style={{ marginBottom: 14 }}>
+  <div className="ff-row" style={{ gap: 12, flexWrap: 'wrap' }}>
+    <label className="ff-muted-2" style={{ fontSize: 13 }}>
+      Goal
+      <select value={onbGoal} onChange={(e)=>setOnbGoal(e.target.value as any)} style={{ display: 'block', marginTop: 6 }}>
+        <option value="strength">Strength</option>
+        <option value="hypertrophy">Muscle gain</option>
+        <option value="fat_loss">Fat loss</option>
+      </select>
+    </label>
+
+    <label className="ff-muted-2" style={{ fontSize: 13 }}>
+      Experience
+      <select value={onbExperience} onChange={(e)=>setOnbExperience(e.target.value as any)} style={{ display: 'block', marginTop: 6 }}>
+        <option value="beginner">Beginner</option>
+        <option value="intermediate">Intermediate</option>
+        <option value="advanced">Advanced</option>
+      </select>
+    </label>
+
+    <label className="ff-muted-2" style={{ fontSize: 13 }}>
+      Days/week
+      <input type="number" min={1} max={7} value={onbDays} onChange={(e)=>setOnbDays(Number(e.target.value||3))} style={{ display: 'block', marginTop: 6, width: 90 }} />
+    </label>
+
+    <label className="ff-muted-2" style={{ fontSize: 13 }}>
+      Equipment
+      <select value={onbEquipment} onChange={(e)=>setOnbEquipment(e.target.value)} style={{ display: 'block', marginTop: 6 }}>
+        <option value="full_gym">Full gym</option>
+        <option value="dumbbells">Dumbbells only</option>
+        <option value="home_basic">Home basic</option>
+        <option value="bodyweight">Bodyweight</option>
+      </select>
+    </label>
+  </div>
+
+  <label className="ff-muted-2" style={{ fontSize: 13, display: 'block', marginTop: 10 }}>
+    Injuries / constraints (optional)
+    <textarea rows={2} value={onbConstraints} onChange={(e)=>setOnbConstraints(e.target.value)} placeholder="e.g., sore shoulder, no running" style={{ display: 'block', marginTop: 6, width: '100%' }} />
+  </label>
+</div>
+
+<ol className="ff-card ff-card-pad" style={{ margin: 0, paddingLeft: 18 }}>
+
         <li>
           <b>{t('step_design_program')}</b>
           <div>
@@ -299,7 +509,7 @@ function Onboarding({ me, onDone }: { me: MeResponse | null; onDone: () => void 
               disabled={aiLocked || onboarding.program_created}
               className={!aiLocked && !onboarding.program_created ? 'ff-btn-primary' : undefined}
               onClick={async () => {
-                await api.post('/api/onboarding/program/generate', { demo: true });
+                await api.post('/api/onboarding/program/generate', { goal: onbGoal, experience: onbExperience, days_per_week: onbDays, equipment: onbEquipment, constraints: onbConstraints });
                 await onDone();
               }}
             >
@@ -961,4 +1171,129 @@ function Landing({ me }: { me: MeResponse | null }) {
 
 function NotFound() {
   return <div>Not found</div>;
+}
+
+
+function Sparkline({ points }: { points: { x: string; y: number }[] }) {
+  const w = 220, h = 56, pad = 6;
+  if (!points.length) return <div className="ff-text-3" style={{ fontSize: 12 }}>No data yet</div>;
+  const ys = points.map(p => p.y);
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
+  const scaleX = (i: number) => pad + (i * (w - pad * 2)) / Math.max(1, points.length - 1);
+  const scaleY = (v: number) => {
+    if (maxY === minY) return h / 2;
+    return h - pad - ((v - minY) * (h - pad * 2)) / (maxY - minY);
+  };
+  const d = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${scaleX(i).toFixed(1)} ${scaleY(p.y).toFixed(1)}`).join(' ');
+  return (
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} aria-label="trend">
+      <path d={d} fill="none" stroke="currentColor" strokeWidth="2" opacity="0.9" />
+    </svg>
+  );
+}
+
+function Progress({ me }: { me: MeResponse | null }) {
+  const [data, setData] = useState<{ weekly: any[]; top: any[] } | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!me) return;
+    (async () => {
+      try {
+        setErr(null);
+        const res = await api.get('/api/progress');
+        setData(res as any);
+      } catch (e: any) {
+        setErr(e?.message || 'Failed to load progress');
+      }
+    })();
+  }, [me]);
+
+  if (!me) return <div className="ff-card ff-card-pad">Login required.</div>;
+
+  const weeklyPts = (data?.weekly || []).map((r: any) => ({ x: String(r.week_start), y: Number(r.volume || 0) }));
+
+  return (
+    <div className="ff-fade-in" style={{ maxWidth: 980, margin: '18px auto 0' }}>
+      <div className="ff-card ff-card-pad">
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
+          <h2 style={{ margin: 0 }}>Progress</h2>
+          <div className="ff-text-3" style={{ fontSize: 12 }}>Last 8 weeks</div>
+        </div>
+        {err && <div className="ff-badge ff-badge-warn" style={{ marginTop: 10 }}>{err}</div>}
+        {!data && !err && <div className="ff-text-3" style={{ marginTop: 10 }}>Loading…</div>}
+        {data && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 14, marginTop: 12 }}>
+            <div className="ff-card" style={{ padding: 14 }}>
+              <div className="ff-text-2" style={{ fontSize: 12, marginBottom: 6 }}>Weekly training volume</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <Sparkline points={weeklyPts} />
+                <div>
+                  <div style={{ fontSize: 20, fontWeight: 700 }}>
+                    {weeklyPts.length ? Math.round(weeklyPts[weeklyPts.length - 1].y).toLocaleString() : '—'}
+                  </div>
+                  <div className="ff-text-3" style={{ fontSize: 12 }}>this week (reps×load)</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="ff-card" style={{ padding: 14 }}>
+              <div className="ff-text-2" style={{ fontSize: 12, marginBottom: 10 }}>Top exercises (28 days)</div>
+              <div style={{ display: 'grid', gap: 8 }}>
+                {(data.top || []).map((r: any) => (
+                  <div key={r.slug} style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
+                    <div>{r.name || r.slug}</div>
+                    <div className="ff-text-3">{Math.round(Number(r.volume || 0)).toLocaleString()}</div>
+                  </div>
+                ))}
+                {(!data.top || data.top.length === 0) && <div className="ff-text-3" style={{ fontSize: 12 }}>No sets logged yet.</div>}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function History({ me }: { me: MeResponse | null }) {
+  const [rows, setRows] = useState<any[]>([]);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!me) return;
+    (async () => {
+      try {
+        setErr(null);
+        const res: any = await api.get('/api/history');
+        setRows(res.workouts || []);
+      } catch (e: any) {
+        setErr(e?.message || 'Failed to load history');
+      }
+    })();
+  }, [me]);
+
+  if (!me) return <div className="ff-card ff-card-pad">Login required.</div>;
+
+  return (
+    <div className="ff-fade-in" style={{ maxWidth: 980, margin: '18px auto 0' }}>
+      <div className="ff-card ff-card-pad">
+        <h2 style={{ marginTop: 0 }}>History</h2>
+        {err && <div className="ff-badge ff-badge-warn" style={{ marginTop: 10 }}>{err}</div>}
+        {!err && rows.length === 0 && <div className="ff-text-3" style={{ marginTop: 10 }}>No workouts yet.</div>}
+        <div style={{ display: 'grid', gap: 10, marginTop: 12 }}>
+          {rows.map((w: any) => (
+            <div key={w.id} className="ff-card" style={{ padding: 12, display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+              <div>
+                <div style={{ fontWeight: 700 }}>{String(w.status || 'completed').toUpperCase()}</div>
+                <div className="ff-text-3" style={{ fontSize: 12 }}>{new Date(w.created_at).toLocaleString()}</div>
+              </div>
+              <div className="ff-text-3" style={{ fontSize: 12 }}>#{String(w.id).slice(0, 8)}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
 }

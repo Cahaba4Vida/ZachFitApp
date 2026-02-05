@@ -7,6 +7,36 @@
   NPM_FLAGS = "--include=dev"
 
 [[redirects]]
+  from = "/api/me"
+  to = "/.netlify/functions/me"
+  status = 200
+
+[[redirects]]
+  from = "/api/today"
+  to = "/.netlify/functions/today"
+  status = 200
+
+[[redirects]]
+  from = "/api/workout/log"
+  to = "/.netlify/functions/workout_log"
+  status = 200
+
+[[redirects]]
+  from = "/api/onboarding/program/generate"
+  to = "/.netlify/functions/onboarding_generate"
+  status = 200
+
+[[redirects]]
+  from = "/api/progress"
+  to = "/.netlify/functions/progress"
+  status = 200
+
+[[redirects]]
+  from = "/api/history"
+  to = "/.netlify/functions/history"
+  status = 200
+
+[[redirects]]
   from = "/api/*"
   to = "/.netlify/functions/api"
   status = 200

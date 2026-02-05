@@ -4,20 +4,29 @@ export type AuthUser = {
 };
 
 function getOriginFromHeaders(headers: Record<string, string | undefined>): string | null {
-  const proto = headers['x-forwarded-proto'] || 'https';
-  const host = headers['host'] || headers['x-forwarded-host'];
-  if (!host) return null;
-  return `${proto}://${host}`;
+  const proto = headers?.['x-forwarded-proto'] || 'https';
+  const host = headers?.['x-forwarded-host'] || headers?.['host'];
+  if (host) return `${proto}://${host}`;
+
+  // Fallbacks (some environments omit host headers)
+  const origin = headers?.['origin'];
+  if (origin) return origin;
+
+  const referer = headers?.['referer'];
+  if (referer) {
+    try {
+      return new URL(referer).origin;
+    } catch {
+      // ignore
+    }
+  }
+  return null;
 }
 
 async function validateWithIdentity(origin: string, token: string): Promise<AuthUser | null> {
-  // Netlify Identity endpoint that returns the current user for a valid access token.
-  // Uses the request origin (works for production, branch deploys, deploy previews).
   const url = `${origin}/.netlify/identity/user`;
   try {
-    const res = await fetch(url, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
     if (!res.ok) return null;
     const data: any = await res.json();
     if (!data?.id) return null;
@@ -29,8 +38,8 @@ async function validateWithIdentity(origin: string, token: string): Promise<Auth
 
 export async function requireAuth(
   authorization: string | undefined,
-  contextUser: any,
-  headers: Record<string, string | undefined>
+  contextUser?: any,
+  headers?: Record<string, string | undefined>
 ): Promise<AuthUser | null> {
   // Prefer Netlify-provided decoded user (most reliable).
   if (contextUser?.sub) {

@@ -52,9 +52,14 @@ async function request<T>(method: string, url: string, body?: unknown): Promise<
   });
 
   if (!res.ok) {
-    const text = await res.text();
-    throw new Error(text || res.statusText);
+  const ct = res.headers.get('content-type') || '';
+  if (ct.includes('application/json')) {
+    const j: any = await res.json().catch(() => null);
+    throw new Error(j?.error || j?.message || res.statusText);
   }
+  const text = await res.text();
+  throw new Error(text || res.statusText);
+}
   return (await res.json()) as T;
 }
 

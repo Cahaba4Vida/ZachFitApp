@@ -1,8 +1,16 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import { BrowserRouter } from 'react-router-dom';
+import { HashRouter } from 'react-router-dom';
 import App from './App';
 import './styles.css';
+
+
+// HASH_ROUTER_COMPAT_REDIRECT:
+// If a user visits /app (no hash), redirect to /#/app so HashRouter routes correctly.
+if (!window.location.hash && window.location.pathname !== '/') {
+  const path = window.location.pathname + window.location.search;
+  window.location.replace('/#' + path);
+}
 
 
 // Disable Service Workers during rapid iteration to avoid stale cached builds.
@@ -15,8 +23,8 @@ if ('serviceWorker' in navigator) {
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <BrowserRouter>
+    <HashRouter>
       <App />
-    </BrowserRouter>
+    </HashRouter>
   </React.StrictMode>
 );
