@@ -17,44 +17,24 @@ async function getToken(): Promise<string | null> {
   const user: any = netlifyIdentity.currentUser();
   if (!user) return null;
 
-  // netlify-identity-widget supports callback style; some builds may also support promises.
-  return await new Promise((resolve) => {
-    let settled = false;
-    const finish = (token: string | null) => {
-      if (settled) return;
-      settled = true;
-      resolve(token);
-    };
+  // Fast path: many Identity builds keep the access token here.
+  const access = user?.token?.access_token;
+  if (typeof access === 'string' && access.length > 0) return access;
 
-    const t = window.setTimeout(() => finish(null), 5000);
-
+  // GoTrue-style API: jwt(forceRefresh?) -> Promise<string>
+  if (typeof user.jwt === 'function') {
     try {
-      const maybe = user.jwt(true, (err: any, token: string) => {
-        window.clearTimeout(t);
-        finish(err ? null : token);
-      });
-
-      // Promise-style fallback (if supported)
-      if (maybe && typeof maybe.then === 'function') {
-        (maybe as Promise<string>)
-          .then((token) => {
-            window.clearTimeout(t);
-            finish(token || null);
-          })
-          .catch(() => {
-            window.clearTimeout(t);
-            finish(null);
-          });
-      }
+      const tok = await withTimeout(Promise.resolve(user.jwt(true)), 5000);
+      return typeof tok === 'string' && tok.length > 0 ? tok : null;
     } catch {
-      window.clearTimeout(t);
-      finish(null);
+      return null;
     }
-  });
+  }
+
+  return null;
 }
 
 async function request<T>(method: string, url: string, body?: unknown): Promise<T> {
-  // Token fetch can hang in some edge cases; enforce a timeout so the UI never deadlocks.
   let token: string | null = null;
   try {
     token = await withTimeout(getToken(), 5000);
