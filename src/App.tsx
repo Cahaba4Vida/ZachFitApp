@@ -420,10 +420,11 @@ function Today({ me }: { me: MeResponse | null }) {
   }
 
   const oneTapLog = async () => {
-    await api.post('/api/workout/log', { program_day_id: plan.program_day_id, mode: 'one_tap' });    if (!data?.day?.id) return;
-    await api.post('/api/workout/log', { program_day_id: data.day.id, status: 'completed', log_as_prescribed: true });
-    alert('Logged ✅');
-  };
+  if (!data?.day?.id) return;
+  await api.post('/api/workout/log', { program_day_id: data.day.id, status: 'completed', log_as_prescribed: true });
+  alert('Logged ✅');
+};
+
 
   const exercises = (showAdjusted && adjusted?.exercises) ? adjusted.exercises : data?.exercises;
 
@@ -431,7 +432,7 @@ function Today({ me }: { me: MeResponse | null }) {
     <div className="ff-fade-in">
       <div className="ff-row" style={{ alignItems: 'baseline' }}>
         <h2 style={{ margin: 0 }}>Today</h2>
-          <button onClick={oneTapLog} onClick={oneTapLog}>Log as prescribed (1 tap)</button>
+          <button onClick={oneTapLog}>Log as prescribed (1 tap)</button>
         {data?.day?.day_index && (
           <div className="ff-muted">
             Day <CountUp value={data.day.day_index} className="ff-num" /> / 28
