@@ -76,11 +76,11 @@ function requireAdmin(userRole: string) {
   if (!requireRole('admin', userRole)) throw new Error('forbidden');
 }
 
-export const handler: Handler = async (event) => {
+export const handler: Handler = async (event, context) => {
   if (event.httpMethod === 'OPTIONS') return json(200, { ok: true });
 
   const path = getPath(event);
-  const auth = await requireAuth(event.headers.authorization || event.headers.Authorization);
+  const auth = await requireAuth(event.headers.authorization || event.headers.Authorization, (context as any)?.clientContext?.user);
 
   const rawBody = event.isBase64Encoded ? Buffer.from(event.body || '', 'base64').toString('utf8') : (event.body || '');
 
