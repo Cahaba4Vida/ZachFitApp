@@ -1,13 +1,67 @@
 import netlifyIdentity from 'netlify-identity-widget';
 
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const t = window.setTimeout(() => reject(new Error('timeout')), ms);
+    p.then((v) => {
+      window.clearTimeout(t);
+      resolve(v);
+    }).catch((e) => {
+      window.clearTimeout(t);
+      reject(e);
+    });
+  });
+}
+
 async function getToken(): Promise<string | null> {
-  const user = netlifyIdentity.currentUser();
+  const user: any = netlifyIdentity.currentUser();
   if (!user) return null;
-  return await new Promise((resolve) => user.jwt(true, (err: any, token: string) => resolve(err ? null : token)));
+
+  // netlify-identity-widget supports callback style; some builds may also support promises.
+  return await new Promise((resolve) => {
+    let settled = false;
+    const finish = (token: string | null) => {
+      if (settled) return;
+      settled = true;
+      resolve(token);
+    };
+
+    const t = window.setTimeout(() => finish(null), 5000);
+
+    try {
+      const maybe = user.jwt(true, (err: any, token: string) => {
+        window.clearTimeout(t);
+        finish(err ? null : token);
+      });
+
+      // Promise-style fallback (if supported)
+      if (maybe && typeof maybe.then === 'function') {
+        (maybe as Promise<string>)
+          .then((token) => {
+            window.clearTimeout(t);
+            finish(token || null);
+          })
+          .catch(() => {
+            window.clearTimeout(t);
+            finish(null);
+          });
+      }
+    } catch {
+      window.clearTimeout(t);
+      finish(null);
+    }
+  });
 }
 
 async function request<T>(method: string, url: string, body?: unknown): Promise<T> {
-  const token = await getToken();
+  // Token fetch can hang in some edge cases; enforce a timeout so the UI never deadlocks.
+  let token: string | null = null;
+  try {
+    token = await withTimeout(getToken(), 5000);
+  } catch {
+    token = null;
+  }
+
   const res = await fetch(url, {
     method,
     headers: {
@@ -16,6 +70,7 @@ async function request<T>(method: string, url: string, body?: unknown): Promise<
     },
     body: body ? JSON.stringify(body) : undefined
   });
+
   if (!res.ok) {
     const text = await res.text();
     throw new Error(text || res.statusText);
