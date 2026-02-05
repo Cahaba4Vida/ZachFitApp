@@ -90,46 +90,78 @@ export const handler: Handler = async (event, context) => {
 
     // ===== Auth-required routes =====
     if (path === '/api/me') {
-      if (!auth) return forbidden('Login required');
-      const userRow = await upsertUser(auth);
-      const ent = await getEntitlements(userRow.id);
-      const system = await getSystemSettings();
+  if (!auth) return forbidden('Login required');
 
-      const program = await one<any>('select id from programs where user_id=$1 and status=\'active\' limit 1', [userRow.id]);
-      const formsGate = await getFormsGate(userRow.id, userRow.first_seen_at);
-      const unlocked = await one<any>('select is_unlocked from onboarding where user_id=$1', [userRow.id]);
-
-      const ai_status = await resolveAiStatus(userRow);
-
-      return json(200, {
-        user: { id: userRow.id, email: userRow.email, role: userRow.role, created_at: userRow.created_at },
-        settings: {
-          language: userRow.preferred_language,
-          units: userRow.units,
-          intensity_style: userRow.intensity_style,
-          auto_adjust_mode: userRow.auto_adjust_mode,
-          analytics_horizon: userRow.analytics_horizon,
-          ai_user_instructions: userRow.ai_user_instructions
-        },
-        onboarding: {
-          program_created: !!program,
-          forms_signed_all: formsGate.signed,
-          forms_due_at: formsGate.due_at,
-          forms_required_now: formsGate.required,
-          is_unlocked: !!unlocked?.is_unlocked
-        },
-        entitlements: {
-          can_use_ai: ent.can_use_ai,
-          can_generate_program: ent.can_generate_program,
-          can_adjust_future: ent.can_adjust_future,
-          free_cycles_remaining: ent.free_cycles_remaining
-        },
-        growth_mode: system.growth_mode,
-        ai_status
-      });
+  const safe = async <T>(fn: () => Promise<T>, fallback: T): Promise<T> => {
+    try {
+      return await fn();
+    } catch {
+      return fallback;
     }
+  };
 
-    if (!auth) return forbidden('Login required');
+  // Always try to upsert the user; if this fails, the rest of the app can't function anyway.
+  const userRow = await upsertUser(auth);
+
+  const ent = await safe(
+    () => getEntitlements(userRow.id),
+    {
+      can_use_ai: false,
+      can_generate_program: false,
+      can_adjust_future: false,
+      free_cycles_remaining: 0
+    } as any
+  );
+
+  const system = await safe(() => getSystemSettings(), { growth_mode: false } as any);
+
+  const program = await safe(
+    () => one<any>("select id from programs where user_id=$1 and status='active' limit 1", [userRow.id]),
+    null as any
+  );
+
+  const formsGate = await safe(
+    () => getFormsGate(userRow.id, userRow.first_seen_at),
+    { signed: true, due_at: null, required: false } as any
+  );
+
+  const unlocked = await safe(
+    () => one<any>('select is_unlocked from onboarding where user_id=$1', [userRow.id]),
+    { is_unlocked: true } as any
+  );
+
+  const ai_status = await safe(() => resolveAiStatus(userRow), { enabled: false, reason: 'unavailable' } as any);
+
+  return json(200, {
+    user: { id: userRow.id, email: userRow.email, role: userRow.role, created_at: userRow.created_at },
+    settings: {
+      language: userRow.preferred_language,
+      units: userRow.units,
+      intensity_style: userRow.intensity_style,
+      auto_adjust_mode: userRow.auto_adjust_mode,
+      analytics_horizon: userRow.analytics_horizon,
+      ai_user_instructions: userRow.ai_user_instructions
+    },
+    onboarding: {
+      program_created: !!program,
+      forms_signed_all: !!formsGate?.signed,
+      forms_due_at: formsGate?.due_at ?? null,
+      forms_required_now: !!formsGate?.required,
+      is_unlocked: !!unlocked?.is_unlocked
+    },
+    entitlements: {
+      can_use_ai: !!ent.can_use_ai,
+      can_generate_program: !!ent.can_generate_program,
+      can_adjust_future: !!ent.can_adjust_future,
+      free_cycles_remaining: Number(ent.free_cycles_remaining ?? 0)
+    },
+    growth_mode: !!system.growth_mode,
+    ai_status
+  });
+}
+
+if (!auth) return forbidden('Login required');
+('Login required');
     const userRow = await upsertUser(auth);
 
     // ===== Liability forms gate (after 7 days of use) =====
