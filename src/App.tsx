@@ -235,7 +235,7 @@ export default function App() {
           <div className="ff-route" key={location.pathname}>
 
             <Routes>
-              <Route path="/" element={<Landing me={me} />} />
+              <Route path="/" element={<Home me={me} />} />
             <Route path="/onboarding" element={<Onboarding me={me} onDone={ctx.refreshMe} />} />
             <Route path="/today" element={<Today me={me} />} />
             <Route path="/settings" element={<Settings me={me} onSaved={ctx.refreshMe} />} />
