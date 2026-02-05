@@ -75,9 +75,13 @@ function Nav({ me }: { me: MeResponse | null }) {
   return (
     <nav className="ff-nav">
       <NavLink to="/" end className={({ isActive }) => (isActive ? 'active' : undefined)}>Home</NavLink>
-      {me && <NavLink to="/today" className={({ isActive }) => (isActive ? 'active' : undefined)}>Today</NavLink>
+      {me && (
+        <>
+          <NavLink to="/today" className={({ isActive }) => (isActive ? 'active' : undefined)}>Today</NavLink>
           <NavLink to="/progress" className={({ isActive }) => (isActive ? 'active' : undefined)}>Progress</NavLink>
-          <NavLink to="/history" className={({ isActive }) => (isActive ? 'active' : undefined)}>History</NavLink>}
+          <NavLink to="/history" className={({ isActive }) => (isActive ? 'active' : undefined)}>History</NavLink>
+        </>
+      )}
       {me && <NavLink to="/inbox" className={({ isActive }) => (isActive ? 'active' : undefined)}>Inbox</NavLink>}
       {me && <NavLink to="/settings" className={({ isActive }) => (isActive ? 'active' : undefined)}>Settings</NavLink>}
       {me && (role === 'admin' || role === 'super_admin') && (
