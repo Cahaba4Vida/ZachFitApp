@@ -1,91 +1,146 @@
-# ZachFitApp
+# ZL FitApp (Netlify + Neon) - Deployable Scaffold
 
-Lightweight coaching web app for building programs, logging workouts, and tracking PRs.
+This repo is a **ready-to-deploy scaffold** implementing the core product rules you specified:
 
-## Features
-- Netlify Identity auth (instant signup/login).
-- Plan builder → 4-week program generator.
-- Program refinement and today-adjust AI flows (via Netlify Function proxy).
-- Workout calendar + logging per set.
-- PR history and progress chart.
-- Admin dashboard with client detail + coach prompt link.
-- PWA support (manifest + service worker) and add-to-home-screen guidance.
+- Netlify Identity auth (multi-user)
+- Growth mode: **Free Flow** vs **Limited Flow** (AI locked for newcomers)
+- Manual approvals queue (admin)
+- Promo codes (single-use per user) with:
+  - optional **growth gate bypass**
+  - rolling **duration from redemption**
+  - paid annual code flow that **immediately redirects to Stripe annual checkout**
+- Settings: per-user **custom AI instructions** (server-enforced **500 char max**)
+- Broadcast messaging (admin)
+- Admin broadcast bot with **transcripts stored for 30 days** (auto-cleaned daily)
+- Legal forms signing: stores receipt in DB and emails a copy to **zach@zachedwardsllc.com** (uses Resend if configured)
 
-## Environment Variables
-Set these in Netlify (or locally when running Netlify dev):
+> Notes
+> - AI model calls are **stubs** in this scaffold. Wire in OpenAI/your provider inside `netlify/functions/api.ts`.
+> - Stripe webhooks are not fully implemented here; you need to add webhook handling for real subscriptions.
 
-- `OPENAI_API_KEY` (required)
-- `OPENAI_MODEL` (optional, default `gpt-4o-mini`)
-- `ADMIN_EMAIL_ALLOWLIST` (optional, default `edwardszachary647@gmail.com`)
-- `DATABASE_URL` (required for Postgres persistence)
-- `PGSSLMODE` (optional, set to `require` if not included in `DATABASE_URL`)
+---
 
-## OpenAI Model Notes
-Some OpenAI models (e.g. `gpt-5`) restrict sampling parameters and only allow the default temperature. The AI function omits the `temperature` field entirely for compatibility, so model selection should not fail with unsupported sampling settings.
+## 1) Quick start (local)
 
-## Local Development
+```bash
+npm install
+cp .env.example .env
+# fill DATABASE_URL (Neon)
 
-1. Install dependencies:
-   ```bash
-   npm install
-   ```
-2. Run Netlify dev:
-   ```bash
-   npx netlify dev
-   ```
-3. Open the app at `http://localhost:8888`.
-4. Run the smoke test (requires a Netlify Identity JWT in `AUTH_TOKEN`):
-   ```bash
-   node scripts/smoke.mjs
-   ```
+# Run Netlify Dev (serves frontend + functions)
+npm run netlify:dev
+```
 
-## Deploy to Netlify
+The app runs at `http://localhost:8888`.
 
-1. Connect the repo in Netlify.
-2. Set the environment variables listed above.
-3. Build settings:
-   - Publish directory: `.`
-   - Functions directory: `netlify/functions`
+---
+
+## 2) Database setup (Neon)
+
+1. Create a Neon Postgres database.
+2. Run the schema:
+
+```sql
+-- run in Neon SQL Editor
+\i db/schema.sql
+```
+
+---
+
+## 3) Netlify Identity
+
+In Netlify Dashboard:
+- Enable **Identity**
+- Enable registration (you can later control growth via the in-app Limited Flow mode)
+
+This scaffold verifies JWTs via the Identity JWKS endpoint.
+
+---
+
+## 4) Stripe (for annual paid promo codes)
+
+1. Create a Stripe annual subscription price.
+2. Put your Stripe secret key in `.env` / Netlify env vars.
+3. In the Admin UI (Promo Codes), create a code with:
+   - billing_mode = `annual_paid`
+   - stripe_price_id_annual = your annual price id
+
+Redeeming the code will redirect immediately to checkout.
+
+---
+
+## 5) Email (Resend)
+
+Optional but recommended for forms signing:
+- Set `RESEND_API_KEY`
+- Set `MAIL_FROM` and `ADMIN_EMAIL`
+
+If not configured, the app will log a message instead of emailing.
+
+---
+
+## 6) Deploy
+
+1. Push this repo to GitHub.
+2. Create a new Netlify site from the repo.
+3. Add environment variables (Site settings â Environment variables):
+   - DATABASE_URL
+   - STRIPE_SECRET_KEY (if using)
+   - RESEND_API_KEY (optional)
+   - MAIL_FROM / ADMIN_EMAIL
 4. Deploy.
 
-## Database Migrations (Neon)
-Run the SQL in `migrations/001_init.sql` via the Neon SQL Editor before first deploy. This creates the tables used for onboarding/program persistence along with shared key-value storage.
+---
 
-## API Overview
-All API routes are available under `/api/*` and map to Netlify functions.
+## Admin bootstrap
 
-- Auth/profile: `/api/whoami`, `/api/profile-get`, `/api/profile-save`
-- Program: `/api/program-generate`, `/api/program-get`, `/api/program-save`, `/api/program-finalize`, `/api/program-revisions`, `/api/program-undo`
-- Workouts: `/api/workouts-get`, `/api/workout-get?date=`, `/api/workout-save?date=`, `/api/workout-log-save?date=`
-- PRs: `/api/pr-add`, `/api/pr-list`, `/api/pr-stats`
-- Audit: `/api/audit-log-event`, `/api/admin/audit-list`
-- Admin: `/api/admin/clients-list`, `/api/admin/client-get`, `/api/admin/client-update`
-- AI: `/api/ai` (modes: `program_refine`, `today_adjust`)
+New users default to role `user`.
+To make your account admin, update your row in `users`:
 
-## Test Checklist
-- Sign up and log in with Netlify Identity.
-- Generate a program with onboarding inputs.
-- Save onboarding and refresh program.
-- Finalize program (audit log event recorded).
-- Open Workouts and log sets.
-- Add PR and verify progress chart.
-- Switch units (lb/kg) in Settings.
-- Admin login (allowlisted email) sees client list and coach prompt.
+```sql
+update users set role='super_admin' where email='zach@zachedwardsllc.com';
+```
 
-## Manual QA Steps
-1. **Auth**: Sign up and log in; confirm user chip updates.
-2. **Plan Builder**: Generate a program and verify week tabs + day cards render.
-3. **Program Chat**: Send a refinement message; ensure AI response appears.
-4. **Workouts**: Open today’s workout, log sets, save; refresh and confirm logs persist.
-5. **PRs**: Add multiple PRs and confirm history + chart update.
-6. **Settings**: Toggle units and confirm save.
-7. **Admin**: Use allowlisted email to open Admin page; verify client detail + coach prompt link.
+---
+
+## Where to implement AI
+
+Inside `netlify/functions/api.ts`:
+- `/api/chat/adjust` (daily workout chatbot)
+- `/api/onboarding/program/generate` (program builder)
+- `/api/admin/assistant/...` (broadcast bot)
+
+Ensure:
+- no medical advice
+- conservative volume/intensity caps
+- no fat-loss goal suggestions
+
+---
+
+## Scheduled cleanup
+
+`netlify/functions/admin-assistant-cleanup.ts` runs daily to delete admin assistant threads where `expires_at < now()`.
 
 
-## Deterministic installs (package-lock)
 
-This repo intentionally pins dependency versions in `package.json`. To generate a `package-lock.json` on your machine, run:
+## Launch checklist (today)
 
-- `npm install` (or `npm i`) in the repo root
+1) Create Neon DB and run `db/schema.sql`
+2) Netlify: enable Identity, set env vars:
+   - DATABASE_URL
+   - APP_URL
+   - ADMIN_EMAIL
+   - OPENAI_API_KEY (and optional OPENAI_MODEL)
+   - STRIPE_SECRET_KEY + STRIPE_WEBHOOK_SECRET (if taking payments today)
+3) Stripe: set a webhook endpoint to:
+   - `https://<your-site>/api/stripe/webhook`
+   (Netlify routes `/api/*` to the api function.)
+4) First login, promote admin:
+   ```sql
+   update users set role='super_admin' where email='zach@zachedwardsllc.com';
+   ```
+5) Create promo codes in Admin > Promo Codes.
 
-Netlify will then use the lockfile for deterministic installs.
+Notes:
+- Program generation and daily adjust use the OpenAI Responses API when OPENAI_API_KEY is set.
+- Coach bot responses are enforced to one sentence server-side.
