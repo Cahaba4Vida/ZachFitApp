@@ -401,7 +401,18 @@ function AuthCallback({
     </div>
   );
 }
-function Home({ me, isAuthed, profileStatus, profileError }: { me: MeResponse | null; isAuthed: boolean; profileStatus: 'idle'|'loading'|'ready'|'error'; profileError: string | null }) {
+function Home({
+  me,
+  isAuthed,
+  profileStatus,
+  profileError,
+}: {
+  me: MeResponse | null;
+  isAuthed: boolean;
+  profileStatus: 'idle' | 'loading' | 'ready' | 'error';
+  profileError: string | null;
+}) {
+  // If we already have profile state, route immediately.
   const nav = useNavigate();
   useEffect(() => {
     if (!me) return;
@@ -409,14 +420,15 @@ function Home({ me, isAuthed, profileStatus, profileError }: { me: MeResponse | 
     else nav('/onboarding', { replace: true });
   }, [me, nav]);
 
-  if (!me) {
-  // If Identity says we're logged in, don't bounce the user back to the login screen.
-  if (isAuthed) {
+  // Identity says logged in, but profile isn't ready yet.
+  if (!me && isAuthed) {
     return (
       <div className="ff-fade-in" style={{ maxWidth: 560, margin: '22px auto 0' }}>
         <div className="ff-card ff-card-pad">
           <h1 style={{ marginBottom: 8 }}>Signed in</h1>
+
           {profileStatus === 'loading' && <p className="ff-text-3">Loading your profile…</p>}
+
           {profileStatus === 'error' && (
             <>
               <div className="ff-badge ff-badge-warn">Profile load failed</div>
@@ -427,9 +439,11 @@ function Home({ me, isAuthed, profileStatus, profileError }: { me: MeResponse | 
               </div>
             </>
           )}
+
           {profileStatus === 'idle' && (
-            <div style={{ marginTop: 12 }}>
+            <div style={{ marginTop: 12, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
               <Link className="ff-btn-primary" to="/auth/callback">Continue</Link>
+              <button className="ff-btn" onClick={() => netlifyIdentity.logout()}>Log out</button>
             </div>
           )}
         </div>
@@ -437,16 +451,20 @@ function Home({ me, isAuthed, profileStatus, profileError }: { me: MeResponse | 
     );
   }
 
-  return (
-    <div className="ff-fade-in" style={{ maxWidth: 560, margin: '22px auto 0' }}>
-      <div className="ff-card ff-card-pad">
-        <h1 style={{ marginBottom: 8 }}>FITFLOW</h1>
-        <p>{t('home_logged_out')}</p>
-        <div style={{ marginTop: 14 }}>
-          <button className="ff-btn-primary" onClick={() => netlifyIdentity.open()}>{t('login')}</button>
+  // Not logged in: show landing + login
+  if (!me) {
+    return (
+      <div className="ff-fade-in" style={{ maxWidth: 560, margin: '22px auto 0' }}>
+        <div className="ff-card ff-card-pad">
+          <h1 style={{ marginBottom: 8 }}>FITFLOW</h1>
+          <p className="ff-text-3" style={{ marginTop: 0 }}>{t('home_logged_out')}</p>
+          <div style={{ marginTop: 14 }}>
+            <button className="ff-btn-primary" onClick={() => netlifyIdentity.open()}>{t('login')}</button>
+          </div>
         </div>
-        <div 
-
+      </div>
+    );
+  }
 
   return <div className="ff-muted">Redirecting…</div>;
 }
