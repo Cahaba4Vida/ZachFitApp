@@ -42,14 +42,24 @@ async function request<T>(method: string, url: string, body?: unknown): Promise<
     token = null;
   }
 
-  const res = await fetch(url, {
+  const controller = new AbortController();
+  const abortT = window.setTimeout(() => controller.abort(), 12000);
+
+  let res: Response;
+  try {
+    res = await fetch(url, {
     method,
     headers: {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {})
     },
-    body: body ? JSON.stringify(body) : undefined
-  });
+    body: body ? JSON.stringify(body) : undefined,
+    signal: controller.signal
+  }).finally(() => window.clearTimeout(abortT));
+  } catch (e: any) {
+    if (e?.name === 'AbortError') throw new Error('timeout');
+    throw e;
+  }
 
   if (!res.ok) {
   const ct = res.headers.get('content-type') || '';

@@ -189,7 +189,7 @@ export default function App() {
   const [onbDays, setOnbDays] = useState<number>(3);
   const [onbEquipment, setOnbEquipment] = useState<string>('full_gym');
   const [onbConstraints, setOnbConstraints] = useState<string>('');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const location = useLocation();
   const nav = useNavigate();
 
@@ -251,6 +251,8 @@ export default function App() {
     setIdentityUser(user);
     // Go to a dedicated callback route that waits for a usable token and bootstraps the app state.
     if (location.pathname !== '/auth/callback') nav('/auth/callback', { replace: true });
+    // Allow the callback route to render immediately; it will manage its own loading state.
+    setLoading(false);
   };
   const onLogout = () => {
     setIdentityUser(null);
@@ -269,6 +271,8 @@ export default function App() {
   if (u) {
     setIdentityUser(u);
     if (location.pathname !== '/auth/callback') nav('/auth/callback', { replace: true });
+    // Allow the callback route to render immediately.
+    setLoading(false);
   } else {
     // Not logged in: we can attempt /me, but failures should be treated as logged out.
     void refreshMe({ treatFailureAsLogout: true });
@@ -295,7 +299,7 @@ export default function App() {
       <Nav me={me} />
       <FormsDueBanner me={me} />
       <div className="ff-container">
-        {loading ? (
+        {(loading && location.pathname !== '/auth/callback') ? (
           <div>Loading...</div>
         ) : (
           <div className="ff-route" key={location.pathname}>
