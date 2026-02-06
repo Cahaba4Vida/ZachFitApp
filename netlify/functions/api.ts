@@ -107,7 +107,6 @@ function requireAdmin(userRole: string) {
 
 export const handler: Handler = async (event, context) => {
   // TOP_LEVEL_TRY_CATCH
-  try {
   const authHeader = getHeader(event.headers, 'authorization');
   if (event.httpMethod === 'OPTIONS') return json(200, { ok: true });
 
@@ -730,7 +729,3 @@ function getBaseUrl(headers: Record<string, string | undefined>) {
 
 
 
-} catch (e: any) {
-  console.error('[api] server_error', { path: event.path, method: event.httpMethod, message: e?.message, stack: e?.stack });
-  return serverError(event.path || 'unknown', e);
-}
