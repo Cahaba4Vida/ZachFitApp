@@ -9,6 +9,14 @@ export function json(statusCode: number, body: any, headers: Record<string,strin
   };
 }
 
+export function badRequest(message: string, details?: any) {
+  return json(400, { error: 'bad_request', message, ...(details !== undefined ? { details } : {}) });
+}
+
+export function notFound(message: string = 'not_found') {
+  return json(404, { error: 'not_found', message });
+}
+
 export function forbidden(message: string) {
   return json(403, { error: 'forbidden', message });
 }
