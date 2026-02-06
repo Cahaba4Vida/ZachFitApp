@@ -189,7 +189,7 @@ export default function App() {
   const [onbDays, setOnbDays] = useState<number>(3);
   const [onbEquipment, setOnbEquipment] = useState<string>('full_gym');
   const [onbConstraints, setOnbConstraints] = useState<string>('');
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const location = useLocation();
   const nav = useNavigate();
 
@@ -216,21 +216,6 @@ export default function App() {
     setLang(data.settings.language);
     setProfileStatus('ready');
   } catch (e: any) {
-    const msg = String(e?.message || '');
-    const looksLikeAuth = /login required|forbidden|unauthorized/i.test(msg);
-
-    // If the backend says we aren't logged in, our Identity session is stale/missing a token.
-    // Clear it so the UI can recover (show login) instead of hanging.
-    if (looksLikeAuth) {
-      try { netlifyIdentity.logout(); } catch { /* ignore */ }
-      setIdentityUser(null);
-      setMe(null);
-      setLang('en');
-      setProfileStatus('idle');
-      setProfileError(null);
-      return;
-    }
-
     // Important: a backend failure is NOT the same as being logged out.
     // Only treat it as logout if we truly have no identity user.
     if (opts.treatFailureAsLogout || !netlifyIdentity.currentUser()) {
@@ -239,7 +224,7 @@ export default function App() {
       setIdentityUser(null);
     }
     setProfileStatus('error');
-    setProfileError(msg || 'Failed to load your profile');
+    setProfileError(e?.message || 'Failed to load your profile');
   } finally {
     setLoading(false);
   }
@@ -251,8 +236,6 @@ export default function App() {
     setIdentityUser(user);
     // Go to a dedicated callback route that waits for a usable token and bootstraps the app state.
     if (location.pathname !== '/auth/callback') nav('/auth/callback', { replace: true });
-    // Allow the callback route to render immediately; it will manage its own loading state.
-    setLoading(false);
   };
   const onLogout = () => {
     setIdentityUser(null);
@@ -271,8 +254,6 @@ export default function App() {
   if (u) {
     setIdentityUser(u);
     if (location.pathname !== '/auth/callback') nav('/auth/callback', { replace: true });
-    // Allow the callback route to render immediately.
-    setLoading(false);
   } else {
     // Not logged in: we can attempt /me, but failures should be treated as logged out.
     void refreshMe({ treatFailureAsLogout: true });
@@ -299,7 +280,7 @@ export default function App() {
       <Nav me={me} />
       <FormsDueBanner me={me} />
       <div className="ff-container">
-        {(loading && location.pathname !== '/auth/callback') ? (
+        {loading ? (
           <div>Loading...</div>
         ) : (
           <div className="ff-route" key={location.pathname}>

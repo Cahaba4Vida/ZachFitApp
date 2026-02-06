@@ -18,7 +18,7 @@ async function getToken(): Promise<string | null> {
   if (!user) return null;
 
   // Fast path: many Identity builds keep the access token here.
-  const access = user?.token?.access_token || user?.tokenDetails?.access_token || user?.token?.accessToken || user?.tokenDetails?.accessToken;
+  const access = user?.token?.access_token;
   if (typeof access === 'string' && access.length > 0) return access;
 
   // GoTrue-style API: jwt(forceRefresh?) -> Promise<string>
@@ -42,24 +42,14 @@ async function request<T>(method: string, url: string, body?: unknown): Promise<
     token = null;
   }
 
-  const controller = new AbortController();
-  const abortT = window.setTimeout(() => controller.abort(), 12000);
-
-  let res: Response;
-  try {
-    res = await fetch(url, {
+  const res = await fetch(url, {
     method,
     headers: {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {})
     },
-    body: body ? JSON.stringify(body) : undefined,
-    signal: controller.signal
-  }).finally(() => window.clearTimeout(abortT));
-  } catch (e: any) {
-    if (e?.name === 'AbortError') throw new Error('timeout');
-    throw e;
-  }
+    body: body ? JSON.stringify(body) : undefined
+  });
 
   if (!res.ok) {
   const ct = res.headers.get('content-type') || '';

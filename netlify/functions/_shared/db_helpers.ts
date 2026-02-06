@@ -1,8 +1,8 @@
-import { sql as neonSql } from './db';
+import { getSql } from './db';
 
 export async function sql(query: string, params: any[] = []) {
-  // Neon serverless client supports sql(query, params)
-  return await (neonSql as any)(query, params);
+  const s = getSql();
+  return await (s as any)(query, params);
 }
 
 export async function one<T>(query: string, params: any[] = []): Promise<T> {
