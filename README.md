@@ -1,146 +1,84 @@
-# ZL FitApp (Netlify + Neon) - Deployable Scaffold
+# Calorie & Weight Tracker (Mock Local App)
 
-This repo is a **ready-to-deploy scaffold** implementing the core product rules you specified:
+## What this is
 
-- Netlify Identity auth (multi-user)
-- Growth mode: **Free Flow** vs **Limited Flow** (AI locked for newcomers)
-- Manual approvals queue (admin)
-- Promo codes (single-use per user) with:
-  - optional **growth gate bypass**
-  - rolling **duration from redemption**
-  - paid annual code flow that **immediately redirects to Stripe annual checkout**
-- Settings: per-user **custom AI instructions** (server-enforced **500 char max**)
-- Broadcast messaging (admin)
-- Admin broadcast bot with **transcripts stored for 30 days** (auto-cleaned daily)
-- Legal forms signing: stores receipt in DB and emails a copy to **zach@zachedwardsllc.com** (uses Resend if configured)
+## Mock mode (no auth, local-only)
+This build runs entirely in **mock mode**:
+- No Netlify Identity login required.
+- No backend/database required for core app usage.
+- Data is cached in browser session storage (`caloriTrackerMockStateV1`) and resets when the tab/session ends (or via Reset Mock Session).
+- Includes a mock landing page before entering onboarding and the full app experience.
 
-> Notes
-> - AI model calls are **stubs** in this scaffold. Wire in OpenAI/your provider inside `netlify/functions/api.ts`.
-> - Stripe webhooks are not fully implemented here; you need to add webhook handling for real subscriptions.
+A static web app deployed on Netlify using:
+- Netlify Identity (email login)
+- Netlify Functions (API backend)
+- Neon Postgres (DATABASE_URL)
+- OpenAI API (OPENAI_API_KEY) for nutrition-label extraction + coaching
 
----
+No other backend services.
 
-## 1) Quick start (local)
-
-```bash
-npm install
-cp .env.example .env
-# fill DATABASE_URL (Neon)
-
-# Run Netlify Dev (serves frontend + functions)
-npm run netlify:dev
-```
-
-The app runs at `http://localhost:8888`.
-
----
-
-## 2) Database setup (Neon)
-
+## Setup (Neon)
 1. Create a Neon Postgres database.
-2. Run the schema:
+2. Run the SQL migrations in order in Neon: `sql/001_init.sql`, `sql/002_user_profile_onboarding.sql`, `sql/003_capacity_optimizations.sql`, `sql/004_quick_fills.sql`, `sql/005_admin_feedback.sql`, `sql/006_billing_limits.sql`, `sql/007_admin_goals_and_passes.sql`, `sql/008_growth_billing_upgrades.sql`, `sql/009_reliability_growth.sql`, `sql/010_scheduled_reconcile_alerts.sql`.
+3. Copy the connection string into Netlify env var `DATABASE_URL` (use pooled connection if available).
 
-```sql
--- run in Neon SQL Editor
-\i db/schema.sql
-```
+## Setup (Netlify)
+1. Deploy this repo to Netlify.
+2. Enable **Identity** in Netlify UI (Project configuration → Identity).
+   - Enable email signups (and confirm emails if desired).
+3. Set env vars (Project configuration → Environment variables):
+   - `DATABASE_URL`
+   - `OPENAI_API_KEY`
+   - `PERSIST_DAILY_SUMMARIES` (`true` to store daily summaries, default is not persisted)
+   - `RETENTION_ADMIN_TOKEN` (required for running retention endpoint)
+   - `HOT_STORAGE_KEEP_DAYS` (optional, default `90`)
+   - `SUMMARY_KEEP_DAYS` (optional, default uses `HOT_STORAGE_KEEP_DAYS`)
+   - `MAX_DB_SIZE_GB` (optional, default `0.49`; auto-trims oldest archive/history when DB grows beyond this)
+   - `ADMIN_DASH_TOKEN` (required for `/admin.html` and admin functions)
+   - `STRIPE_MONTHLY_PAYMENT_LINK_URL` (optional override for monthly upgrade URL)
+   - `STRIPE_YEARLY_PAYMENT_LINK_URL` (optional override for yearly upgrade URL)
+   - `STRIPE_SECRET_KEY` (required for Stripe webhook sync and Stripe billing portal)
+   - `STRIPE_WEBHOOK_SECRET` (required for `/api/stripe-webhook` signature validation)
 
----
+## Local dev
+Netlify Identity context is not always present in local `netlify dev`. Test auth-dependent functions on a deployed preview/site.
 
-## 3) Netlify Identity
+## Notes
+- The server computes the “day” using America/Denver for consistency.
+- The app does not store images—photos are sent to the function for extraction and discarded.
+- `raw_extraction` is intentionally compact (`source`, `confidence`, `estimated`, short `notes`) to reduce storage overhead.
+- Retention/cold storage: run `/.netlify/functions/admin-retention-run` with header `x-admin-token: <RETENTION_ADMIN_TOKEN>` to archive + delete old rows from hot tables.
+- Auto-retention now runs hourly (Netlify Scheduled Function) and enforces a DB-size ceiling (default `0.49 GB`) by trimming oldest rows first from archive tables, then hot tables only if still needed.
+- Admin dashboard: open `/admin.html`, enter `ADMIN_DASH_TOKEN`, view user/app stats, and generate AI insights from current usage metrics.
+- Mandatory feedback broadcast: from `/admin.html` you can activate a feedback form; logged-in users must submit it before continuing to use the app.
 
-In Netlify Dashboard:
-- Enable **Identity**
-- Enable registration (you can later control growth via the in-app Limited Flow mode)
+## New in v1.1
+- Edit/delete food entries
+- Weekly charts (last 7 days) for calories (bars) and weight (line)
 
-This scaffold verifies JWTs via the Identity JWKS endpoint.
+## Free vs Premium
+- **Free tier**: up to 5 food entries/day, 3 AI actions/day, and last 20 days of history.
+- **Premium**: monthly ($5) or yearly ($50) Stripe upgrades; includes unlimited food entries, unlimited AI actions, unlimited history, and data export.
+- Use `/api/create-checkout-session` with `{ "interval": "monthly" | "yearly" }` for upgrade checkout links.
+- Use `/api/stripe-webhook` to automatically keep subscription access in sync while payments stay active.
 
----
-
-## 4) Stripe (for annual paid promo codes)
-
-1. Create a Stripe annual subscription price.
-2. Put your Stripe secret key in `.env` / Netlify env vars.
-3. In the Admin UI (Promo Codes), create a code with:
-   - billing_mode = `annual_paid`
-   - stripe_price_id_annual = your annual price id
-
-Redeeming the code will redirect immediately to checkout.
-
----
-
-## 5) Email (Resend)
-
-Optional but recommended for forms signing:
-- Set `RESEND_API_KEY`
-- Set `MAIL_FROM` and `ADMIN_EMAIL`
-
-If not configured, the app will log a message instead of emailing.
-
----
-
-## 6) Deploy
-
-1. Push this repo to GitHub.
-2. Create a new Netlify site from the repo.
-3. Add environment variables (Site settings â Environment variables):
-   - DATABASE_URL
-   - STRIPE_SECRET_KEY (if using)
-   - RESEND_API_KEY (optional)
-   - MAIL_FROM / ADMIN_EMAIL
-4. Deploy.
-
----
-
-## Admin bootstrap
-
-New users default to role `user`.
-To make your account admin, update your row in `users`:
-
-```sql
-update users set role='super_admin' where email='zach@zachedwardsllc.com';
-```
-
----
-
-## Where to implement AI
-
-Inside `netlify/functions/api.ts`:
-- `/api/chat/adjust` (daily workout chatbot)
-- `/api/onboarding/program/generate` (program builder)
-- `/api/admin/assistant/...` (broadcast bot)
-
-Ensure:
-- no medical advice
-- conservative volume/intensity caps
-- no fat-loss goal suggestions
-
----
-
-## Scheduled cleanup
-
-`netlify/functions/admin-assistant-cleanup.ts` runs daily to delete admin assistant threads where `expires_at < now()`.
+## Billing / Growth Upgrades
+- Admin can now edit free-tier limits and monthly/yearly pricing URLs from `/admin.html`.
+- Admin can grant direct premium passes or quick trial passes to specific users.
+- Stripe webhooks are logged in `stripe_webhook_events` for observability and churn-risk monitoring.
+- Premium users can export JSON or CSV via `/api/export-data?format=json|csv&from=YYYY-MM-DD&to=YYYY-MM-DD`.
+- Users can manage billing through `/api/manage-subscription` (Stripe portal when configured).
 
 
+## Reliability / Conversion instrumentation
+- `stripe_webhook_events` enforces unique Stripe event ids for idempotent processing.
+- `app_events` tracks in-app conversion events (`upgrade_click`, `manage_subscription_click`, `export_data_click`, `near_limit_warning_shown`).
+- Admin can run `/api/admin-reconcile-subscriptions` to repair Stripe subscription state drift.
+- Scheduled reconciliation runs hourly via `scheduled-reconcile-subscriptions` and logs runs to `subscription_reconcile_runs`.
+- Alert notifications are emitted to `RECON_ALERT_WEBHOOK_URL` (optional) and persisted in `alert_notifications`.
+- User-side tracking endpoint: `/api/track-event` (authenticated).
 
-## Launch checklist (today)
-
-1) Create Neon DB and run `db/schema.sql`
-2) Netlify: enable Identity, set env vars:
-   - DATABASE_URL
-   - APP_URL
-   - ADMIN_EMAIL
-   - OPENAI_API_KEY (and optional OPENAI_MODEL)
-   - STRIPE_SECRET_KEY + STRIPE_WEBHOOK_SECRET (if taking payments today)
-3) Stripe: set a webhook endpoint to:
-   - `https://<your-site>/api/stripe/webhook`
-   (Netlify routes `/api/*` to the api function.)
-4) First login, promote admin:
-   ```sql
-   update users set role='super_admin' where email='zach@zachedwardsllc.com';
-   ```
-5) Create promo codes in Admin > Promo Codes.
-
-Notes:
-- Program generation and daily adjust use the OpenAI Responses API when OPENAI_API_KEY is set.
-- Coach bot responses are enforced to one sentence server-side.
+## Quality gates
+- `npm run lint:syntax` performs syntax checks across all JS files.
+- `npm run test:integration` runs billing integration tests for webhook duplicate handling, payment failure/cancellation transitions, and admin-pass entitlement override.
+- CI runs `npm run test` on pushes and pull requests.

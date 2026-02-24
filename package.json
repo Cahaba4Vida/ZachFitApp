@@ -1,33 +1,14 @@
 {
-  "name": "zl-fitapp",
+  "name": "calorie-tracker-netlify",
   "private": true,
-  "version": "0.1.0",
-  "type": "module",
-  "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview",
-    "netlify:dev": "netlify dev"
-  },
+  "type": "commonjs",
   "dependencies": {
-    "@neondatabase/serverless": "^0.9.5",
-    "@netlify/functions": "^2.8.1",
-    "jose": "^5.2.0",
-    "netlify-identity-widget": "^1.9.2",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "react-router-dom": "^6.26.2",
-    "resend": "^3.5.0",
-    "stripe": "^16.12.0",
-    "zod": "^3.23.8"
+    "pg": "^8.12.0"
   },
-  "devDependencies": {
-    "@types/node": "^22.10.2",
-    "@types/react": "^18.3.12",
-    "@types/react-dom": "^18.3.1",
-    "@vitejs/plugin-react": "^4.3.1",
-    "netlify-cli": "^17.36.0",
-    "typescript": "^5.6.3",
-    "vite": "^5.4.8"
+  "scripts": {
+    "test:smoke": "node scripts/smoke-check.js",
+    "lint:syntax": "for f in $(rg --files -g '*.js' -g '*.cjs'); do node --check \"$f\" || exit 1; done",
+    "test:integration": "node --test tests/*.test.cjs",
+    "test": "npm run lint:syntax && npm run test:smoke && npm run test:integration"
   }
 }
