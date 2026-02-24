@@ -1597,7 +1597,7 @@ function openAiGoalFlow(mode) {
   document.querySelectorAll('.aiInputUnitText').forEach(n => { n.innerText = unitSuffix(); });
   el('aiGoalDateInput').min = isoToday();
   const showWelcome = mode === 'onboarding';
-  el('onboardingTitle').innerText = showWelcome ? 'Welcome to Aethon Calorie Tracker' : 'Generate AI calorie & macro goals';
+  el('onboardingTitle').innerText = showWelcome ? 'Welcome to Aethon' : 'Generate AI calorie & macro goals';
   el('onboardingContinueBtn').classList.toggle('hidden', !showWelcome);
   el('aiDeclineHint').innerText = showWelcome ? 'If you decline, onboarding will be marked complete. You can still set goals later in Settings.' : 'Decline keeps your current goals unchanged.';
   showOnboardingScreen(showWelcome ? 'welcome' : 'inputs');
