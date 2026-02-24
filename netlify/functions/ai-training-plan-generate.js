@@ -1,5 +1,6 @@
 const { json } = require("./_util");
 const { requireUser } = require("./_auth");
+const { query } = require("./_db");
 const { enforceAiActionLimit } = require("./_plan");
 const { responsesCreate, outputText } = require("./_openai");
 
@@ -92,8 +93,51 @@ Make the TEXT section concise but complete: list Week 1–4, day names, exercise
       max_output_tokens: 1800
     });
 
+    
     const text = outputText(resp) || "";
-    return json(200, { plan_text: text });
+
+    // --- Save to DB (per-user) ---
+    await query(`
+      create table if not exists training_programs (
+        user_id text primary key,
+        program_text text,
+        program_json jsonb,
+        inputs jsonb,
+        created_at timestamptz not null default now(),
+        updated_at timestamptz not null default now()
+      )
+    `);
+
+    // Extract JSON block after "PLAN (JSON)" if present
+    let programJson = null;
+    try {
+      const idx = text.indexOf("PLAN (JSON)");
+      if (idx !== -1) {
+        const slice = text.slice(idx);
+        const firstBrace = slice.indexOf("{");
+        const lastBrace = slice.lastIndexOf("}");
+        if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+          const jsonStr = slice.slice(firstBrace, lastBrace + 1);
+          programJson = JSON.parse(jsonStr);
+        }
+      }
+    } catch {}
+
+    const inputs = { goal, experience, days_per_week: daysPerWeek, equipment };
+
+    await query(
+      `insert into training_programs (user_id, program_text, program_json, inputs, created_at, updated_at)
+       values ($1, $2, $3, $4, now(), now())
+       on conflict (user_id) do update
+         set program_text = excluded.program_text,
+             program_json = excluded.program_json,
+             inputs = excluded.inputs,
+             updated_at = now()`,
+      [auth.user.userId, text, programJson, inputs]
+    );
+
+    return json(200, { plan_text: text, saved: true });
+
   } catch (e) {
     return json(e.statusCode || 500, { error: e.message || "Failed to generate training plan" });
   }

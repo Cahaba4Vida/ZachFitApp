@@ -108,7 +108,30 @@
     }
   }
 
-  function wireCopy() {
+  
+  async function loadExistingTrainingPlan() {
+    ensureCardInjected();
+    const out = $("aiTrainingPlanText");
+    const err = $("aiTrainingError");
+    if (!out || !err) return;
+
+    try {
+      const r = await fetch("/api/training-program-get", {
+        method: "GET",
+        headers: await authHeaders()
+      });
+      const txt = await r.text();
+      let body = null;
+      try { body = txt ? JSON.parse(txt) : null; } catch { body = null; }
+      if (!r.ok) return;
+
+      if (body && body.has_program && body.program_text) {
+        out.textContent = body.program_text;
+      }
+    } catch {}
+  }
+
+function wireCopy() {
     const btn = $("aiTrainingCopyBtn");
     const out = $("aiTrainingPlanText");
     if (!btn || !out) return;
@@ -141,7 +164,12 @@
         tries++;
         const scr = $("onboardingSuggestScreen");
         if (scr && !scr.classList.contains("hidden")) {
-          generateTrainingPlan();
+          loadExistingTrainingPlan();
+          // If no saved program yet, generate a fresh one.
+          const out = $("aiTrainingPlanText");
+          if (out && (out.textContent === "—" || !out.textContent || out.textContent.trim() === "—")) {
+            generateTrainingPlan();
+          }
           return;
         }
         if (tries < 10) setTimeout(tick, 120);
@@ -153,5 +181,7 @@
   document.addEventListener("DOMContentLoaded", () => {
     wireCopy();
     wireGenerateHook();
+    // Preload saved program (won't show until Step 3 is injected/visible).
+    loadExistingTrainingPlan();
   });
 })();
