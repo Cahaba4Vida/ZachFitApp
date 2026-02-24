@@ -543,6 +543,16 @@
 <div class="muted" id="aiGoalFlowError" style="color:#b00020;"></div>
 </div>
 <div class="hidden" id="onboardingSuggestScreen">
+<div class="computed" id="aiTrainingPlanCard" style="margin-top:12px;">
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
+    <div><strong>4-week training program:</strong></div>
+    <button id="aiTrainingCopyBtn" type="button" class="linkMiniBtn" style="padding:0 6px;">Copy</button>
+  </div>
+  <div class="muted" id="aiTrainingLoading" style="display:none;margin-top:8px;">Generating your 4-week program…</div>
+  <div class="muted" id="aiTrainingError" style="color:#b00020;margin-top:8px;"></div>
+  <pre id="aiTrainingPlanText" style="white-space:pre-wrap;margin-top:8px;max-height:280px;overflow:auto;">—</pre>
+</div>
+
 <p><strong>Daily calories:</strong> <span id="aiSuggestedCalories">—</span></p>
 <p><strong>Protein:</strong> <span id="aiSuggestedProtein">—</span>g   <strong>Carbs:</strong> <span id="aiSuggestedCarbs">—</span>g   <strong>Fat:</strong> <span id="aiSuggestedFat">—</span>g</p>
 <ul id="aiRationaleList"></ul>
@@ -651,6 +661,8 @@
 </div>
 <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
 <script src="app.bundle.js?v=1"></script>
+<script src="workout_patch.js"></script>
+
 
 <div id="aiGlobalLoading" class="aiGlobalLoading hidden" role="status" aria-live="polite" aria-label="AI is working">
   <div class="aiGlobalLoadingCard">
